@@ -69,6 +69,12 @@ target_sources(GuiAppExample
         Main.cpp
         MainComponent.cpp
         hidapi/hidapi/hidapi.h
+        hidapi/mac/hid.c
+)
+
+# Add include directories for HIDapi
+target_include_directories(GuiAppExample PRIVATE
+    hidapi/hidapi
 )
 
 # `target_compile_definitions` adds some preprocessor definitions to our target. In a Projucer
@@ -109,3 +115,11 @@ target_link_libraries(GuiAppExample
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags
         juce::juce_recommended_warning_flags)
+
+# Add macOS frameworks required for HIDapi
+if(APPLE)
+    target_link_libraries(GuiAppExample PRIVATE
+        "-framework IOKit"
+        "-framework CoreFoundation"
+    )
+endif()
