@@ -22,24 +22,34 @@ struct HIDDeviceInfo {
     juce::String serialNumber;
 };
 
-class MainComponent final : public juce::Component, public juce::Button::Listener
+class MainComponent final : public juce::Component, public juce::Button::Listener, public juce::Timer
 {
 public:
     //==============================================================================
     MainComponent();
+    ~MainComponent() override;
 
     //==============================================================================
     void paint (juce::Graphics&) override;
     void resized() override;
     void buttonClicked (juce::Button* button) override;
+    void timerCallback() override;
 
 private:
     //==============================================================================
     void enumerateHIDDevices();
     void createDeviceButtons();
+    void connectToDevice(const HIDDeviceInfo& device);
+    void disconnectFromDevice();
+    void readHIDEvents();
+    void parseInputReport(unsigned char* data, int length);
 
     std::vector<HIDDeviceInfo> hidDevices;
     juce::OwnedArray<juce::TextButton> deviceButtons;
+
+    hid_device* connectedDevice;
+    HIDDeviceInfo connectedDeviceInfo;
+    bool isDeviceConnected;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainComponent)
 };
