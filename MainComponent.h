@@ -13,7 +13,16 @@
     This component lives inside our window, and this is where you should put all
     your controls and content.
 */
-class MainComponent final : public juce::Component
+struct HIDDeviceInfo {
+    juce::String path;
+    unsigned short vendorId;
+    unsigned short productId;
+    juce::String manufacturer;
+    juce::String product;
+    juce::String serialNumber;
+};
+
+class MainComponent final : public juce::Component, public juce::Button::Listener
 {
 public:
     //==============================================================================
@@ -22,10 +31,15 @@ public:
     //==============================================================================
     void paint (juce::Graphics&) override;
     void resized() override;
+    void buttonClicked (juce::Button* button) override;
 
 private:
     //==============================================================================
     void enumerateHIDDevices();
+    void createDeviceButtons();
+
+    std::vector<HIDDeviceInfo> hidDevices;
+    juce::OwnedArray<juce::TextButton> deviceButtons;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainComponent)
 };
