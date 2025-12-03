@@ -188,6 +188,10 @@ void MainComponent::connectToDevice(const HIDDeviceInfo& device)
 
     printf("Successfully connected to device: %s %s\n",
            device.manufacturer.toUTF8(), device.product.toUTF8());
+
+    // Get and display report descriptor information
+    getReportDescriptor();
+
     printf("Starting event monitoring...\n");
 
     // Start timer to read events periodically
@@ -264,4 +268,226 @@ void MainComponent::parseInputReport(unsigned char* data, int length)
     }
 
     printf("---\n");
+}
+
+void MainComponent::getReportDescriptor()
+{
+    if (!connectedDevice) return;
+
+    unsigned char descriptor[4096];
+    int descriptorLength = hid_get_report_descriptor(connectedDevice, descriptor, sizeof(descriptor));
+
+    if (descriptorLength > 0) {
+        printf("\n=== HID Report Descriptor ===\n");
+        printf("Descriptor length: %d bytes\n\n", descriptorLength);
+        parseReportDescriptor(descriptor, descriptorLength);
+        printf("=== End Report Descriptor ===\n\n");
+    } else {
+        printf("Failed to retrieve report descriptor\n");
+    }
+}
+
+void MainComponent::parseReportDescriptor(unsigned char* descriptor, int length)
+{
+    printf("Raw descriptor bytes:\n");
+    for (int i = 0; i < length; ++i) {
+        printf("%02X ", descriptor[i]);
+        if ((i + 1) % 16 == 0) printf("\n");
+    }
+    if (length % 16 != 0) printf("\n\n");
+
+    printf("Parsed descriptor structure:\n");
+
+    int i = 0;
+    int indent = 0;
+    unsigned short currentUsagePage = 0;
+    unsigned short currentUsage = 0;
+    int reportID = 0;
+    int reportSize = 0;
+    int reportCount = 0;
+
+    while (i < length) {
+        unsigned char item = descriptor[i];
+        unsigned char tag = (item >> 4) & 0x0F;
+        unsigned char type = (item >> 2) & 0x03;
+        unsigned char size = item & 0x03;
+
+        if (size == 3) size = 4; // Special case for 4-byte items
+
+        // Print indentation
+        for (int j = 0; j < indent; ++j) printf("  ");
+
+        switch (type) {
+            case 0: // Main items
+                switch (tag) {
+                    case 0x8: // Input
+                        printf("Input (");
+                        if (i + 1 < length) {
+                            unsigned char flags = descriptor[i + 1];
+                            if (flags & 0x01) printf("Constant, ");
+                            else printf("Data, ");
+                            if (flags & 0x02) printf("Variable, ");
+                            else printf("Array, ");
+                            if (flags & 0x04) printf("Relative");
+                            else printf("Absolute");
+                        }
+                        printf(")\n");
+                        break;
+                    case 0x9: // Output
+                        printf("Output\n");
+                        break;
+                    case 0xB: // Feature
+                        printf("Feature\n");
+                        break;
+                    case 0xA: // Collection
+                        printf("Collection (");
+                        if (i + 1 < length) {
+                            switch (descriptor[i + 1]) {
+                                case 0x00: printf("Physical"); break;
+                                case 0x01: printf("Application"); break;
+                                case 0x02: printf("Logical"); break;
+                                default: printf("0x%02X", descriptor[i + 1]); break;
+                            }
+                        }
+                        printf(")\n");
+                        indent++;
+                        break;
+                    case 0xC: // End Collection
+                        indent--;
+                        for (int j = 0; j < indent; ++j) printf("  ");
+                        printf("End Collection\n");
+                        break;
+                }
+                break;
+
+            case 1: // Global items
+                switch (tag) {
+                    case 0x0: // Usage Page
+                        if (i + 1 < length) {
+                            currentUsagePage = descriptor[i + 1];
+                            if (i + 2 < length && size > 1) {
+                                currentUsagePage |= (descriptor[i + 2] << 8);
+                            }
+                            printf("Usage Page (0x%04X - ", currentUsagePage);
+                            printUsageInfo(currentUsagePage, 0);
+                            printf(")\n");
+                        }
+                        break;
+                    case 0x1: // Logical Minimum
+                        printf("Logical Minimum\n");
+                        break;
+                    case 0x2: // Logical Maximum
+                        printf("Logical Maximum\n");
+                        break;
+                    case 0x8: // Report ID
+                        if (i + 1 < length) {
+                            reportID = descriptor[i + 1];
+                            printf("Report ID (%d)\n", reportID);
+                        }
+                        break;
+                    case 0x7: // Report Size
+                        if (i + 1 < length) {
+                            reportSize = descriptor[i + 1];
+                            printf("Report Size (%d bits)\n", reportSize);
+                        }
+                        break;
+                    case 0x9: // Report Count
+                        if (i + 1 < length) {
+                            reportCount = descriptor[i + 1];
+                            printf("Report Count (%d)\n", reportCount);
+                        }
+                        break;
+                }
+                break;
+
+            case 2: // Local items
+                switch (tag) {
+                    case 0x0: // Usage
+                        if (i + 1 < length) {
+                            currentUsage = descriptor[i + 1];
+                            if (i + 2 < length && size > 1) {
+                                currentUsage |= (descriptor[i + 2] << 8);
+                            }
+                            printf("Usage (0x%04X - ", currentUsage);
+                            printUsageInfo(currentUsagePage, currentUsage);
+                            printf(")\n");
+                        }
+                        break;
+                    case 0x1: // Usage Minimum
+                        printf("Usage Minimum\n");
+                        break;
+                    case 0x2: // Usage Maximum
+                        printf("Usage Maximum\n");
+                        break;
+                }
+                break;
+        }
+
+        i += 1 + size;
+    }
+}
+
+void MainComponent::printUsageInfo(unsigned short usagePage, unsigned short usage)
+{
+    switch (usagePage) {
+        case 0x01: // Generic Desktop
+            printf("Generic Desktop");
+            if (usage != 0) {
+                printf(" - ");
+                switch (usage) {
+                    case 0x01: printf("Pointer"); break;
+                    case 0x02: printf("Mouse"); break;
+                    case 0x04: printf("Joystick"); break;
+                    case 0x05: printf("Game Pad"); break;
+                    case 0x06: printf("Keyboard"); break;
+                    case 0x07: printf("Keypad"); break;
+                    case 0x30: printf("X"); break;
+                    case 0x31: printf("Y"); break;
+                    case 0x32: printf("Z"); break;
+                    case 0x38: printf("Wheel"); break;
+                    default: printf("0x%02X", usage); break;
+                }
+            }
+            break;
+        case 0x07: // Keyboard/Keypad
+            printf("Keyboard/Keypad");
+            if (usage != 0) {
+                printf(" - ");
+                if (usage >= 0x04 && usage <= 0x1D) {
+                    printf("Key %c", 'A' + (usage - 0x04));
+                } else if (usage >= 0x1E && usage <= 0x27) {
+                    printf("Key %d", (usage - 0x1E + 1) % 10);
+                } else {
+                    switch (usage) {
+                        case 0x28: printf("Enter"); break;
+                        case 0x29: printf("Escape"); break;
+                        case 0x2A: printf("Backspace"); break;
+                        case 0x2B: printf("Tab"); break;
+                        case 0x2C: printf("Space"); break;
+                        case 0xE0: printf("Left Ctrl"); break;
+                        case 0xE1: printf("Left Shift"); break;
+                        case 0xE2: printf("Left Alt"); break;
+                        case 0xE3: printf("Left GUI"); break;
+                        case 0xE4: printf("Right Ctrl"); break;
+                        case 0xE5: printf("Right Shift"); break;
+                        case 0xE6: printf("Right Alt"); break;
+                        case 0xE7: printf("Right GUI"); break;
+                        default: printf("0x%02X", usage); break;
+                    }
+                }
+            }
+            break;
+        case 0x09: // Button
+            printf("Button");
+            if (usage != 0) {
+                printf(" - Button %d", usage);
+            }
+            break;
+        case 0x0C: // Consumer
+            printf("Consumer");
+            break;
+        default:
+            printf("Page 0x%04X", usagePage);
+            break;
+    }
 }

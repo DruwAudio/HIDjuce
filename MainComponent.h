@@ -43,6 +43,9 @@ private:
     void disconnectFromDevice();
     void readHIDEvents();
     void parseInputReport(unsigned char* data, int length);
+    void getReportDescriptor();
+    void parseReportDescriptor(unsigned char* descriptor, int length);
+    void printUsageInfo(unsigned short usagePage, unsigned short usage);
 
     std::vector<HIDDeviceInfo> hidDevices;
     juce::OwnedArray<juce::TextButton> deviceButtons;
