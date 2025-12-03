@@ -6,6 +6,12 @@ MainComponent::MainComponent()
 {
     setSize (600, 400);
 
+    // Set up disconnect button
+    disconnectButton.setButtonText("Disconnect Device");
+    disconnectButton.addListener(this);
+    disconnectButton.setEnabled(false);
+    addAndMakeVisible(disconnectButton);
+
     // Enumerate HID devices when the component is created
     enumerateHIDDevices();
     createDeviceButtons();
@@ -34,6 +40,11 @@ void MainComponent::resized()
     // Layout the device buttons in a vertical list
     auto bounds = getLocalBounds();
     bounds.reduce(10, 10); // Add some padding
+
+    // Reserve space for disconnect button at the top
+    auto disconnectBounds = bounds.removeFromTop(35);
+    disconnectButton.setBounds(disconnectBounds);
+    bounds.removeFromTop(10); // Add spacing
 
     const int buttonHeight = 30;
     const int buttonSpacing = 5;
@@ -140,6 +151,12 @@ void MainComponent::createDeviceButtons()
 
 void MainComponent::buttonClicked(juce::Button* button)
 {
+    // Check if disconnect button was clicked
+    if (button == &disconnectButton) {
+        disconnectFromDevice();
+        return;
+    }
+
     // Find which device button was clicked
     for (int i = 0; i < deviceButtons.size(); ++i) {
         if (deviceButtons[i] == button) {
@@ -196,6 +213,9 @@ void MainComponent::connectToDevice(const HIDDeviceInfo& device)
 
     // Start timer to read events periodically
     startTimer(10); // Read every 10ms
+
+    // Enable disconnect button
+    disconnectButton.setEnabled(true);
 }
 
 void MainComponent::disconnectFromDevice()
@@ -207,6 +227,9 @@ void MainComponent::disconnectFromDevice()
         connectedDevice = nullptr;
         isDeviceConnected = false;
         printf("Disconnected from device\n");
+
+        // Disable disconnect button
+        disconnectButton.setEnabled(false);
     }
 }
 
@@ -241,13 +264,16 @@ void MainComponent::parseInputReport(unsigned char* data, int length)
     }
     printf("\n");
 
-    // Basic parsing examples:
     if (length > 0) {
         unsigned char reportId = data[0];
         printf("  Report ID: 0x%02X\n", reportId);
 
-        // For keyboards, bytes 2-7 typically contain key codes
-        if (length >= 8 && reportId == 0x01) {
+        // ELO Touch parsing for Atmel maXTouch (based on connected device)
+        if (connectedDeviceInfo.vendorId == 0x03EB && connectedDeviceInfo.productId == 0x8A6E) {
+            parseELOTouchData(data, length, reportId);
+        }
+        // Standard keyboard parsing
+        else if (length >= 8 && reportId == 0x01) {
             printf("  Modifier keys: 0x%02X\n", data[1]);
             printf("  Key codes: ");
             for (int i = 2; i < 8; ++i) {
@@ -257,9 +283,8 @@ void MainComponent::parseInputReport(unsigned char* data, int length)
             }
             printf("\n");
         }
-
-        // For mice, typically X/Y movement and button states
-        if (length >= 4 && (reportId == 0x02 || reportId == 0x01)) {
+        // Standard mouse parsing
+        else if (length >= 4 && (reportId == 0x02 || reportId == 0x01)) {
             if (length > 1) printf("  Buttons: 0x%02X\n", data[1]);
             if (length > 2) printf("  X movement: %d\n", (signed char)data[2]);
             if (length > 3) printf("  Y movement: %d\n", (signed char)data[3]);
@@ -489,5 +514,90 @@ void MainComponent::printUsageInfo(unsigned short usagePage, unsigned short usag
         default:
             printf("Page 0x%04X", usagePage);
             break;
+    }
+}
+
+void MainComponent::parseELOTouchData(unsigned char* data, int length, unsigned char reportId)
+{
+    printf("  ELO Touch Event Analysis:\n");
+
+    if (reportId == 1 || reportId == 2) {
+        printf("  Report ID %d (63 bytes of touch data)\n", reportId);
+
+        // Look for common touch patterns
+        // Many touch devices use specific byte patterns for touch events
+
+        // Check for touch status indicators (common positions)
+        if (length > 1) printf("  Status/Flags: 0x%02X\n", data[1]);
+
+        // Look for coordinate data patterns
+        // Touch coordinates are often stored as 16-bit values
+        if (length >= 6) {
+            // Try interpreting bytes 2-3 as X coordinate (little endian)
+            uint16_t x1 = data[2] | (data[3] << 8);
+            uint16_t y1 = data[4] | (data[5] << 8);
+            printf("  Possible X1: %d (0x%04X), Y1: %d (0x%04X)\n", x1, x1, y1, y1);
+
+            // Try big endian interpretation
+            uint16_t x1_be = data[3] | (data[2] << 8);
+            uint16_t y1_be = data[5] | (data[4] << 8);
+            printf("  Alt X1: %d (0x%04X), Y1: %d (0x%04X)\n", x1_be, x1_be, y1_be, y1_be);
+        }
+
+        if (length >= 10) {
+            // Look for second touch point
+            uint16_t x2 = data[6] | (data[7] << 8);
+            uint16_t y2 = data[8] | (data[9] << 8);
+            printf("  Possible X2: %d (0x%04X), Y2: %d (0x%04X)\n", x2, x2, y2, y2);
+        }
+
+        // Look for pressure/contact information
+        if (length > 10) printf("  Pressure/Contact: 0x%02X\n", data[10]);
+
+        // Check for touch ID or contact count
+        if (length > 11) printf("  Touch ID/Count: 0x%02X\n", data[11]);
+
+        // Look for patterns in the data
+        printf("  Non-zero bytes: ");
+        for (int i = 1; i < length; ++i) {
+            if (data[i] != 0) {
+                printf("[%d]=0x%02X ", i, data[i]);
+            }
+        }
+        printf("\n");
+
+        // Check for repeating patterns that might indicate structure
+        printf("  First 16 bytes: ");
+        for (int i = 0; i < 16 && i < length; ++i) {
+            printf("%02X ", data[i]);
+        }
+        printf("\n");
+
+        // Look for bytes that change frequently (likely coordinates)
+        static unsigned char lastData[64] = {0};
+        static bool hasLastData = false;
+
+        if (hasLastData && length <= 64) {
+            printf("  Changed bytes: ");
+            for (int i = 1; i < length; ++i) {
+                if (data[i] != lastData[i]) {
+                    printf("[%d]:%02X->%02X ", i, lastData[i], data[i]);
+                }
+            }
+            printf("\n");
+        }
+
+        // Store current data for next comparison
+        if (length <= 64) {
+            memcpy(lastData, data, length);
+            hasLastData = true;
+        }
+
+        // Special ELO packet analysis
+        // ELO devices often have specific packet headers
+        if (length >= 4) {
+            printf("  Packet analysis: [0]=%02X [1]=%02X [2]=%02X [3]=%02X\n",
+                   data[0], data[1], data[2], data[3]);
+        }
     }
 }

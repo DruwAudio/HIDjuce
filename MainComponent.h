@@ -46,9 +46,11 @@ private:
     void getReportDescriptor();
     void parseReportDescriptor(unsigned char* descriptor, int length);
     void printUsageInfo(unsigned short usagePage, unsigned short usage);
+    void parseELOTouchData(unsigned char* data, int length, unsigned char reportId);
 
     std::vector<HIDDeviceInfo> hidDevices;
     juce::OwnedArray<juce::TextButton> deviceButtons;
+    juce::TextButton disconnectButton;
 
     hid_device* connectedDevice;
     HIDDeviceInfo connectedDeviceInfo;
