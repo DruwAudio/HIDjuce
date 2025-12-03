@@ -519,85 +519,68 @@ void MainComponent::printUsageInfo(unsigned short usagePage, unsigned short usag
 
 void MainComponent::parseELOTouchData(unsigned char* data, int length, unsigned char reportId)
 {
-    printf("  ELO Touch Event Analysis:\n");
+    if (reportId != 1 || length < 59) return;
 
-    if (reportId == 1 || reportId == 2) {
-        printf("  Report ID %d (63 bytes of touch data)\n", reportId);
+    // Based on the analysis, touch data structure:
+    // Bytes 12-13: X coordinate (little endian)
+    // Bytes 17-18: Y coordinate (little endian)
+    // Byte 58: Touch state (02 = touching, 01 = released)
 
-        // Look for common touch patterns
-        // Many touch devices use specific byte patterns for touch events
+    unsigned char touchState = data[58];
 
-        // Check for touch status indicators (common positions)
-        if (length > 1) printf("  Status/Flags: 0x%02X\n", data[1]);
+    // ELO Multi-touch structure identified:
+    // Touch 1: Bytes 2-3 (X), Bytes 6-7 (Y)
+    // Touch 2: Bytes 12-13 (X), Bytes 17-18 (Y)
+    // Timestamp: Bytes 56-57
+    // Touch state: Byte 58
 
-        // Look for coordinate data patterns
-        // Touch coordinates are often stored as 16-bit values
-        if (length >= 6) {
-            // Try interpreting bytes 2-3 as X coordinate (little endian)
-            uint16_t x1 = data[2] | (data[3] << 8);
-            uint16_t y1 = data[4] | (data[5] << 8);
-            printf("  Possible X1: %d (0x%04X), Y1: %d (0x%04X)\n", x1, x1, y1, y1);
+    uint16_t touch1_x = data[2] | (data[3] << 8);
+    uint16_t touch1_y = data[6] | (data[7] << 8);
+    uint16_t touch2_x = data[12] | (data[13] << 8);
+    uint16_t touch2_y = data[17] | (data[18] << 8);
+    uint16_t timestamp = data[56] | (data[57] << 8);
 
-            // Try big endian interpretation
-            uint16_t x1_be = data[3] | (data[2] << 8);
-            uint16_t y1_be = data[5] | (data[4] << 8);
-            printf("  Alt X1: %d (0x%04X), Y1: %d (0x%04X)\n", x1_be, x1_be, y1_be, y1_be);
-        }
+    // Detect active touches (reasonable coordinate range)
+    bool touch1_active = (touch1_x > 0 && touch1_x < 32000 && touch1_y > 0 && touch1_y < 32000);
+    bool touch2_active = (touch2_x > 0 && touch2_x < 32000 && touch2_y > 0 && touch2_y < 32000);
 
-        if (length >= 10) {
-            // Look for second touch point
-            uint16_t x2 = data[6] | (data[7] << 8);
-            uint16_t y2 = data[8] | (data[9] << 8);
-            printf("  Possible X2: %d (0x%04X), Y2: %d (0x%04X)\n", x2, x2, y2, y2);
-        }
+    printf("  🟢 Touch Events (Time: %d):\n", timestamp);
 
-        // Look for pressure/contact information
-        if (length > 10) printf("  Pressure/Contact: 0x%02X\n", data[10]);
+    if (touch1_active) {
+        printf("    👆 Touch 1: X=%d, Y=%d\n", touch1_x, touch1_y);
+    }
 
-        // Check for touch ID or contact count
-        if (length > 11) printf("  Touch ID/Count: 0x%02X\n", data[11]);
+    if (touch2_active) {
+        printf("    ✋ Touch 2: X=%d, Y=%d\n", touch2_x, touch2_y);
+    }
 
-        // Look for patterns in the data
-        printf("  Non-zero bytes: ");
-        for (int i = 1; i < length; ++i) {
-            if (data[i] != 0) {
-                printf("[%d]=0x%02X ", i, data[i]);
-            }
-        }
-        printf("\n");
+    if (!touch1_active && !touch2_active) {
+        printf("    ⚪ No active touches\n");
+    }
 
-        // Check for repeating patterns that might indicate structure
-        printf("  First 16 bytes: ");
-        for (int i = 0; i < 16 && i < length; ++i) {
-            printf("%02X ", data[i]);
-        }
-        printf("\n");
+    // Show additional data
+    if (data[14] != 0) printf("    Pressure/Size 1: 0x%02X\n", data[14]);
+    if (data[19] != 0) printf("    Pressure/Size 2: 0x%02X\n", data[19]);
 
-        // Look for bytes that change frequently (likely coordinates)
-        static unsigned char lastData[64] = {0};
-        static bool hasLastData = false;
-
-        if (hasLastData && length <= 64) {
-            printf("  Changed bytes: ");
-            for (int i = 1; i < length; ++i) {
-                if (data[i] != lastData[i]) {
-                    printf("[%d]:%02X->%02X ", i, lastData[i], data[i]);
+    // Check for multi-touch - look for additional coordinate patterns
+    if (touchState == 0x02) {
+        for (int offset = 20; offset < 40; offset += 8) {
+            if (data[offset] != 0 || data[offset + 1] != 0 ||
+                data[offset + 4] != 0 || data[offset + 5] != 0) {
+                uint16_t x2 = data[offset] | (data[offset + 1] << 8);
+                uint16_t y2 = data[offset + 4] | (data[offset + 5] << 8);
+                if (x2 > 0 && x2 < 65000 && y2 > 0 && y2 < 65000) {
+                    printf("  🔴 TOUCH2: X=%d, Y=%d (offset %d)\n", x2, y2, offset);
                 }
             }
-            printf("\n");
         }
+    }
 
-        // Store current data for next comparison
-        if (length <= 64) {
-            memcpy(lastData, data, length);
-            hasLastData = true;
-        }
-
-        // Special ELO packet analysis
-        // ELO devices often have specific packet headers
-        if (length >= 4) {
-            printf("  Packet analysis: [0]=%02X [1]=%02X [2]=%02X [3]=%02X\n",
-                   data[0], data[1], data[2], data[3]);
-        }
+    // Show touch pressure or additional data if available
+    if (length > 14 && data[14] != 0) {
+        printf("  Pressure/Size: 0x%02X\n", data[14]);
+    }
+    if (length > 15 && data[15] != 0) {
+        printf("  Additional: 0x%02X\n", data[15]);
     }
 }
