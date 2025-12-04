@@ -127,7 +127,6 @@ bool AudioPluginAudioProcessor::isBusesLayoutSupported (const BusesLayout& layou
 void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
                                               juce::MidiBuffer& midiMessages)
 {
-    juce::ignoreUnused (midiMessages);
 
     juce::ScopedNoDenormals noDenormals;
     auto totalNumInputChannels  = getTotalNumInputChannels();
@@ -153,12 +152,25 @@ void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         touchActive.store(false);
     }
 
+    // Check for MIDI note-on messages
+    bool midiNoteTriggered = false;
+    for (auto metadata : midiMessages)
+    {
+        auto message = metadata.getMessage();
+        if (message.isNoteOn())
+        {
+            midiNoteTriggered = true;
+            break;
+        }
+    }
+
     // Generate click impulse on touch start
     bool currentTouchState = touchActive.load();
     bool touchStarted = currentTouchState && !previousTouchState;
     previousTouchState = currentTouchState;
 
-    if (touchStarted) {
+    // Generate click on either touch start or MIDI note-on
+    if (touchStarted || midiNoteTriggered) {
         for (int channel = 0; channel < totalNumInputChannels; ++channel)
         {
             auto* channelData = buffer.getWritePointer(channel);
