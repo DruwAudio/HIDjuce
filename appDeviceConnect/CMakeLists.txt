@@ -15,7 +15,7 @@ cmake_minimum_required(VERSION 3.22)
 # `project()` command. `project()` sets up some helpful variables that describe source/binary
 # directories, and the current project version. This is a standard CMake command.
 
-project(GUI_APP_EXAMPLE VERSION 0.0.1)
+project(HID_DEVICE_CONNECTION VERSION 0.0.1)
 
 # If you've installed JUCE somehow (via a package manager, or directly using the CMake install
 # target), you'll need to tell this project that it depends on the installed copy of JUCE. If you've
@@ -26,7 +26,7 @@ project(GUI_APP_EXAMPLE VERSION 0.0.1)
 # JUCE setup
 
 # Include the JUCE submodule, needed for JUCE-based CMake definitions
-set(JUCE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/JUCE" CACHE STRING "")
+set(JUCE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../JUCE" CACHE STRING "")
 
 add_subdirectory(
     ${JUCE_ROOT}
@@ -68,13 +68,13 @@ target_sources(GuiAppExample
     PRIVATE
         Main.cpp
         MainComponent.cpp
-        hidapi/hidapi/hidapi.h
-        hidapi/mac/hid.c
+        ../hidapi/hidapi/hidapi.h
+        ../hidapi/mac/hid.c
 )
 
 # Add include directories for HIDapi
 target_include_directories(GuiAppExample PRIVATE
-    hidapi/hidapi
+    ../hidapi/hidapi
 )
 
 # `target_compile_definitions` adds some preprocessor definitions to our target. In a Projucer

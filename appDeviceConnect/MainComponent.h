@@ -6,7 +6,7 @@
 // you could `#include <JuceHeader.h>` here instead, to make all your module headers visible.
 #include <juce_gui_extra/juce_gui_extra.h>
 
-#include "hidapi/hidapi/hidapi.h"
+#include "../hidapi/hidapi/hidapi.h"
 
 //==============================================================================
 /*
