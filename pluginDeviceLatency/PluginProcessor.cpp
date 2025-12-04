@@ -257,7 +257,7 @@ void AudioPluginAudioProcessor::connectToDevice(const HIDDeviceInfo& device)
     connectedDeviceInfo = device;
 
     // Start timer to read events periodically
-    startTimer(10); // Read every 10ms
+    startTimer(1); // Read every 1ms for lowest latency
 }
 
 void AudioPluginAudioProcessor::disconnectFromDevice()
