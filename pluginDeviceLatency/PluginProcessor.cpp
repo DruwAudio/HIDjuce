@@ -142,6 +142,11 @@ void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
         buffer.clear (i, 0, buffer.getNumSamples());
 
+    // Read HID events directly in audio callback for lowest latency
+    if (connectedDevice) {
+        readHIDEvents();
+    }
+
     // Check for touch timeout (no HID events means finger lifted)
     juce::int64 currentTime = juce::Time::currentTimeMillis();
     if (touchActive.load() && (currentTime - lastTouchTime > touchTimeoutMs)) {
@@ -255,27 +260,17 @@ void AudioPluginAudioProcessor::connectToDevice(const HIDDeviceInfo& device)
 
     hid_set_nonblocking(connectedDevice, 1);
     connectedDeviceInfo = device;
-
-    // Start timer to read events periodically
-    startTimer(1); // Read every 1ms for lowest latency
 }
 
 void AudioPluginAudioProcessor::disconnectFromDevice()
 {
     if (connectedDevice) {
-        stopTimer();
         hid_close(connectedDevice);
         hid_exit();
         connectedDevice = nullptr;
     }
 }
 
-void AudioPluginAudioProcessor::timerCallback()
-{
-    if (connectedDevice) {
-        readHIDEvents();
-    }
-}
 
 void AudioPluginAudioProcessor::readHIDEvents()
 {
