@@ -12,10 +12,13 @@ AudioPluginAudioProcessor::AudioPluginAudioProcessor()
                      #endif
                        )
 {
+    // Initialize HID devices list
+    enumerateHIDDevices();
 }
 
 AudioPluginAudioProcessor::~AudioPluginAudioProcessor()
 {
+    disconnectFromDevice();
 }
 
 //==============================================================================
@@ -139,17 +142,25 @@ void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
         buffer.clear (i, 0, buffer.getNumSamples());
 
-    // This is the place where you'd normally do the guts of your plugin's
-    // audio processing...
-    // Make sure to reset the state if your inner loop is processing
-    // the samples and the outer loop is handling the channels.
-    // Alternatively, you can process the samples with the channels
-    // interleaved by keeping the same state.
-    for (int channel = 0; channel < totalNumInputChannels; ++channel)
-    {
-        auto* channelData = buffer.getWritePointer (channel);
-        juce::ignoreUnused (channelData);
-        // ..do something to the data...
+    // Check for touch timeout (no HID events means finger lifted)
+    juce::int64 currentTime = juce::Time::currentTimeMillis();
+    if (touchActive.load() && (currentTime - lastTouchTime > touchTimeoutMs)) {
+        touchActive.store(false);
+    }
+
+    // Generate click impulse on touch start
+    bool currentTouchState = touchActive.load();
+    bool touchStarted = currentTouchState && !previousTouchState;
+    previousTouchState = currentTouchState;
+
+    if (touchStarted) {
+        for (int channel = 0; channel < totalNumInputChannels; ++channel)
+        {
+            auto* channelData = buffer.getWritePointer(channel);
+            if (buffer.getNumSamples() > 0) {
+                channelData[0] = 0.5f; // Single impulse at first sample
+            }
+        }
     }
 }
 
@@ -178,6 +189,139 @@ void AudioPluginAudioProcessor::setStateInformation (const void* data, int sizeI
     // You should use this method to restore your parameters from this memory block,
     // whose contents will have been created by the getStateInformation() call.
     juce::ignoreUnused (data, sizeInBytes);
+}
+
+//==============================================================================
+// HID Device Management
+
+std::vector<HIDDeviceInfo> AudioPluginAudioProcessor::getAvailableHIDDevices()
+{
+    return hidDevices;
+}
+
+void AudioPluginAudioProcessor::enumerateHIDDevices()
+{
+    hidDevices.clear();
+
+    if (hid_init() != 0) {
+        return;
+    }
+
+    struct hid_device_info* devices = hid_enumerate(0x0, 0x0);
+    struct hid_device_info* current_device = devices;
+
+    while (current_device) {
+        HIDDeviceInfo deviceInfo;
+        deviceInfo.path = juce::String(current_device->path);
+        deviceInfo.vendorId = current_device->vendor_id;
+        deviceInfo.productId = current_device->product_id;
+
+        if (current_device->manufacturer_string)
+            deviceInfo.manufacturer = juce::String(current_device->manufacturer_string);
+        else
+            deviceInfo.manufacturer = "Unknown";
+
+        if (current_device->product_string)
+            deviceInfo.product = juce::String(current_device->product_string);
+        else
+            deviceInfo.product = "Unknown Product";
+
+        if (current_device->serial_number)
+            deviceInfo.serialNumber = juce::String(current_device->serial_number);
+        else
+            deviceInfo.serialNumber = "No Serial";
+
+        hidDevices.push_back(deviceInfo);
+        current_device = current_device->next;
+    }
+
+    hid_free_enumeration(devices);
+    hid_exit();
+}
+
+void AudioPluginAudioProcessor::connectToDevice(const HIDDeviceInfo& device)
+{
+    disconnectFromDevice();
+
+    if (hid_init() != 0) {
+        return;
+    }
+
+    connectedDevice = hid_open_path(device.path.toUTF8());
+    if (!connectedDevice) {
+        hid_exit();
+        return;
+    }
+
+    hid_set_nonblocking(connectedDevice, 1);
+    connectedDeviceInfo = device;
+
+    // Start timer to read events periodically
+    startTimer(10); // Read every 10ms
+}
+
+void AudioPluginAudioProcessor::disconnectFromDevice()
+{
+    if (connectedDevice) {
+        stopTimer();
+        hid_close(connectedDevice);
+        hid_exit();
+        connectedDevice = nullptr;
+    }
+}
+
+void AudioPluginAudioProcessor::timerCallback()
+{
+    if (connectedDevice) {
+        readHIDEvents();
+    }
+}
+
+void AudioPluginAudioProcessor::readHIDEvents()
+{
+    if (!connectedDevice) return;
+
+    unsigned char buffer[256];
+    int bytesRead = hid_read(connectedDevice, buffer, sizeof(buffer));
+
+    if (bytesRead > 0) {
+        parseInputReport(buffer, bytesRead);
+    } else if (bytesRead < 0) {
+        disconnectFromDevice();
+    }
+}
+
+void AudioPluginAudioProcessor::parseInputReport(unsigned char* data, int length)
+{
+    if (length > 0) {
+        unsigned char reportId = data[0];
+
+        // ELO Touch parsing for Atmel maXTouch
+        if (connectedDeviceInfo.vendorId == 0x03EB && connectedDeviceInfo.productId == 0x8A6E) {
+            parseELOTouchData(data, length, reportId);
+        }
+    }
+}
+
+void AudioPluginAudioProcessor::parseELOTouchData(unsigned char* data, int length, unsigned char reportId)
+{
+    if (reportId != 1 || length < 59) return;
+
+    // Extract primary touch coordinates
+    uint16_t touch1_x = data[2] | (data[3] << 8);
+    uint16_t touch1_y = data[6] | (data[7] << 8);
+
+    // Detect active touches (reasonable coordinate range)
+    bool touch1_active = (touch1_x > 0 && touch1_x < 32000 && touch1_y > 0 && touch1_y < 32000);
+
+    if (touch1_active) {
+        touchActive.store(true);
+        touchX.store(touch1_x);
+        touchY.store(touch1_y);
+        lastTouchTime = juce::Time::currentTimeMillis();
+    } else {
+        touchActive.store(false);
+    }
 }
 
 //==============================================================================

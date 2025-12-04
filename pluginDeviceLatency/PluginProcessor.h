@@ -5,7 +5,17 @@
 #include "../hidapi/hidapi/hidapi.h"
 
 //==============================================================================
-class AudioPluginAudioProcessor final : public juce::AudioProcessor
+struct HIDDeviceInfo {
+    juce::String path;
+    unsigned short vendorId;
+    unsigned short productId;
+    juce::String manufacturer;
+    juce::String product;
+    juce::String serialNumber;
+};
+
+//==============================================================================
+class AudioPluginAudioProcessor final : public juce::AudioProcessor, public juce::Timer
 {
 public:
     //==============================================================================
@@ -44,7 +54,38 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
+    //==============================================================================
+    // HID Device Management
+    std::vector<HIDDeviceInfo> getAvailableHIDDevices();
+    void connectToDevice(const HIDDeviceInfo& device);
+    void disconnectFromDevice();
+    bool isDeviceConnected() const { return connectedDevice != nullptr; }
+    const HIDDeviceInfo& getConnectedDeviceInfo() const { return connectedDeviceInfo; }
+
+    // Timer callback for reading HID events
+    void timerCallback() override;
+
 private:
+    //==============================================================================
+    // HID functionality
+    void enumerateHIDDevices();
+    void readHIDEvents();
+    void parseInputReport(unsigned char* data, int length);
+    void parseELOTouchData(unsigned char* data, int length, unsigned char reportId);
+
+    std::vector<HIDDeviceInfo> hidDevices;
+    hid_device* connectedDevice = nullptr;
+    HIDDeviceInfo connectedDeviceInfo;
+
+    // Touch data for audio processing
+    std::atomic<bool> touchActive{false};
+    std::atomic<int> touchX{0};
+    std::atomic<int> touchY{0};
+
+    // Touch state tracking for click generation
+    bool previousTouchState = false;
+    juce::int64 lastTouchTime = 0;
+    const juce::int64 touchTimeoutMs = 50; // Reset touch state if no events for 50ms
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioPluginAudioProcessor)
 };
