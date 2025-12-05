@@ -1,6 +1,8 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <memory>
+#include <atomic>
 
 #include "../hidapi/hidapi/hidapi.h"
 
@@ -70,6 +72,9 @@ private:
     void readHIDEvents();
     void parseInputReport(unsigned char* data, int length);
     void parseELOTouchData(unsigned char* data, int length, unsigned char reportId);
+    void startHidPollingThread();
+    void stopHidPollingThread();
+    void hidPollingThreadFunction();
 
     std::vector<HIDDeviceInfo> hidDevices;
     hid_device* connectedDevice = nullptr;
@@ -83,7 +88,27 @@ private:
     // Touch state tracking for click generation
     bool previousTouchState = false;
     juce::int64 lastTouchTime = 0;
-    const juce::int64 touchTimeoutMs = 50; // Reset touch state if no events for 50ms
+    const juce::int64 touchTimeoutMs = 50;
+
+    // Optimized audio processing state
+    bool midiTriggerPending = false;
+    bool touchTriggerPending = false;
+
+    // Pre-allocated HID buffer to avoid allocations in audio thread
+    unsigned char hidBuffer[256];
+
+    // HID polling thread implementation
+    class HIDPollingThread : public juce::Thread
+    {
+    public:
+        HIDPollingThread(AudioPluginAudioProcessor& p) : juce::Thread("HIDPolling"), processor(p) {}
+        void run() override;
+    private:
+        AudioPluginAudioProcessor& processor;
+    };
+
+    std::unique_ptr<HIDPollingThread> hidThread;
+    std::atomic<bool> shouldStopHidThread{false};
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioPluginAudioProcessor)
 };

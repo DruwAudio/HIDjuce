@@ -88,10 +88,15 @@ target_include_directories(HIDLatencyTest PRIVATE
 
 target_compile_definitions(HIDLatencyTest
     PUBLIC
-        # JUCE_WEB_BROWSER and JUCE_USE_CURL would be on by default, but you might not need them.
-        JUCE_WEB_BROWSER=0  # If you remove this, add `NEEDS_WEB_BROWSER TRUE` to the `juce_add_plugin` call
-        JUCE_USE_CURL=0     # If you remove this, add `NEEDS_CURL TRUE` to the `juce_add_plugin` call
-        JUCE_VST3_CAN_REPLACE_VST2=0)
+        JUCE_WEB_BROWSER=0
+        JUCE_USE_CURL=0
+        JUCE_VST3_CAN_REPLACE_VST2=0
+        # Performance optimizations
+        JUCE_STRICT_REFCOUNTEDPOINTER=1
+    PRIVATE
+        # Additional performance flags
+        $<$<CONFIG:Release>:NDEBUG>
+        $<$<CONFIG:Release>:JUCE_OPTIMISE_AUDIO_PLUGIN=1>)
 
 # If your target needs extra binary assets, you can add them here. The first argument is the name of
 # a new static library target that will include all the binary resources. There is an optional
@@ -108,9 +113,25 @@ target_compile_definitions(HIDLatencyTest
 # linked automatically. If we'd generated a binary data target above, we would need to link to it
 # here too. This is a standard CMake command.
 
+# Performance-oriented compiler flags
+if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
+    target_compile_options(HIDLatencyTest PRIVATE
+        $<$<CONFIG:Release>:-O3 -ffast-math -march=native -mtune=native>
+        $<$<CONFIG:Release>:-flto>
+    )
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(HIDLatencyTest PRIVATE
+        $<$<CONFIG:Release>:-O3 -ffast-math -march=native -mtune=native>
+        $<$<CONFIG:Release>:-flto>
+    )
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+    target_compile_options(HIDLatencyTest PRIVATE
+        $<$<CONFIG:Release>:/O2 /fp:fast>
+    )
+endif()
+
 target_link_libraries(HIDLatencyTest
     PRIVATE
-        # AudioPluginData           # If we'd created a binary data target, we'd link to it here
         juce::juce_audio_utils
     PUBLIC
         juce::juce_recommended_config_flags

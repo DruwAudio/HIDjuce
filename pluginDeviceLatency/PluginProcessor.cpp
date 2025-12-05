@@ -12,12 +12,12 @@ AudioPluginAudioProcessor::AudioPluginAudioProcessor()
                      #endif
                        )
 {
-    // Initialize HID devices list
     enumerateHIDDevices();
 }
 
 AudioPluginAudioProcessor::~AudioPluginAudioProcessor()
 {
+    stopHidPollingThread();
     disconnectFromDevice();
 }
 
@@ -127,55 +127,44 @@ bool AudioPluginAudioProcessor::isBusesLayoutSupported (const BusesLayout& layou
 void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
                                               juce::MidiBuffer& midiMessages)
 {
-
     juce::ScopedNoDenormals noDenormals;
-    auto totalNumInputChannels  = getTotalNumInputChannels();
     auto totalNumOutputChannels = getTotalNumOutputChannels();
 
-    // In case we have more outputs than inputs, this code clears any output
-    // channels that didn't contain input data, (because these aren't
-    // guaranteed to be empty - they may contain garbage).
-    // This is here to avoid people getting screaming feedback
-    // when they first compile a plugin, but obviously you don't need to keep
-    // this code if your algorithm always overwrites all the output channels.
-    for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
+    // Clear output channels
+    for (auto i = 0; i < totalNumOutputChannels; ++i)
         buffer.clear (i, 0, buffer.getNumSamples());
 
-    // Read HID events directly in audio callback for lowest latency
-    if (connectedDevice) {
-        readHIDEvents();
-    }
-
-    // Check for touch timeout (no HID events means finger lifted)
-    juce::int64 currentTime = juce::Time::currentTimeMillis();
-    if (touchActive.load() && (currentTime - lastTouchTime > touchTimeoutMs)) {
-        touchActive.store(false);
-    }
-
-    // Check for MIDI note-on messages
-    bool midiNoteTriggered = false;
-    for (auto metadata : midiMessages)
-    {
-        auto message = metadata.getMessage();
-        if (message.isNoteOn())
-        {
-            midiNoteTriggered = true;
-            break;
+    // Fast MIDI scan - early exit on first note-on
+    bool midiTriggered = midiTriggerPending;
+    if (!midiTriggered && !midiMessages.isEmpty()) {
+        for (const auto& metadata : midiMessages) {
+            if (metadata.getMessage().isNoteOn()) {
+                midiTriggered = true;
+                break;
+            }
         }
     }
+    midiTriggerPending = false;
 
-    // Generate click impulse on touch start
-    bool currentTouchState = touchActive.load();
-    bool touchStarted = currentTouchState && !previousTouchState;
+    // Check for touch events from polling thread
+    bool currentTouchState = touchActive.load(std::memory_order_relaxed);
+    bool touchStarted = touchTriggerPending || (currentTouchState && !previousTouchState);
     previousTouchState = currentTouchState;
+    touchTriggerPending = false;
 
-    // Generate click on either touch start or MIDI note-on
-    if (touchStarted || midiNoteTriggered) {
-        for (int channel = 0; channel < totalNumInputChannels; ++channel)
-        {
-            auto* channelData = buffer.getWritePointer(channel);
-            if (buffer.getNumSamples() > 0) {
-                channelData[0] = 0.5f; // Single impulse at first sample
+    // Generate optimized click impulse
+    if (touchStarted || midiTriggered) {
+        const int numSamples = buffer.getNumSamples();
+        if (numSamples > 0) {
+            // Generate on output channels for maximum compatibility
+            for (int channel = 0; channel < totalNumOutputChannels; ++channel) {
+                auto* channelData = buffer.getWritePointer(channel);
+                channelData[0] = 0.5f;
+
+                // Optional: add slight decay for better click sound
+                if (numSamples > 1) {
+                    channelData[1] = 0.1f;
+                }
             }
         }
     }
@@ -272,10 +261,15 @@ void AudioPluginAudioProcessor::connectToDevice(const HIDDeviceInfo& device)
 
     hid_set_nonblocking(connectedDevice, 1);
     connectedDeviceInfo = device;
+
+    // Start high-priority polling thread
+    startHidPollingThread();
 }
 
 void AudioPluginAudioProcessor::disconnectFromDevice()
 {
+    stopHidPollingThread();
+
     if (connectedDevice) {
         hid_close(connectedDevice);
         hid_exit();
@@ -288,13 +282,12 @@ void AudioPluginAudioProcessor::readHIDEvents()
 {
     if (!connectedDevice) return;
 
-    unsigned char buffer[256];
-    int bytesRead = hid_read(connectedDevice, buffer, sizeof(buffer));
+    int bytesRead = hid_read(connectedDevice, hidBuffer, sizeof(hidBuffer));
 
     if (bytesRead > 0) {
-        parseInputReport(buffer, bytesRead);
+        parseInputReport(hidBuffer, bytesRead);
     } else if (bytesRead < 0) {
-        disconnectFromDevice();
+        shouldStopHidThread = true;
     }
 }
 
@@ -314,21 +307,61 @@ void AudioPluginAudioProcessor::parseELOTouchData(unsigned char* data, int lengt
 {
     if (reportId != 1 || length < 59) return;
 
-    // Extract primary touch coordinates
-    uint16_t touch1_x = data[2] | (data[3] << 8);
-    uint16_t touch1_y = data[6] | (data[7] << 8);
+    // Extract primary touch coordinates with optimized bit operations
+    const uint16_t touch1_x = static_cast<uint16_t>(data[2]) | (static_cast<uint16_t>(data[3]) << 8);
+    const uint16_t touch1_y = static_cast<uint16_t>(data[6]) | (static_cast<uint16_t>(data[7]) << 8);
 
-    // Detect active touches (reasonable coordinate range)
-    bool touch1_active = (touch1_x > 0 && touch1_x < 32000 && touch1_y > 0 && touch1_y < 32000);
+    // Optimized touch detection
+    const bool touch1_active = (touch1_x > 0 && touch1_x < 32000 && touch1_y > 0 && touch1_y < 32000);
+    const bool previousTouch = touchActive.load(std::memory_order_relaxed);
 
     if (touch1_active) {
-        touchActive.store(true);
-        touchX.store(touch1_x);
-        touchY.store(touch1_y);
+        touchX.store(touch1_x, std::memory_order_relaxed);
+        touchY.store(touch1_y, std::memory_order_relaxed);
         lastTouchTime = juce::Time::currentTimeMillis();
+
+        // Signal touch start for immediate audio response
+        if (!previousTouch) {
+            touchTriggerPending = true;
+        }
+        touchActive.store(true, std::memory_order_relaxed);
     } else {
-        touchActive.store(false);
+        touchActive.store(false, std::memory_order_relaxed);
     }
+}
+
+//==============================================================================
+// HID Polling Thread Functions
+
+void AudioPluginAudioProcessor::startHidPollingThread()
+{
+    stopHidPollingThread();
+    shouldStopHidThread.store(false);
+
+    hidThread = std::make_unique<HIDPollingThread>(*this);
+    hidThread->startThread(juce::Thread::Priority::high);
+}
+
+void AudioPluginAudioProcessor::stopHidPollingThread()
+{
+    shouldStopHidThread.store(true);
+    if (hidThread && hidThread->isThreadRunning()) {
+        hidThread->stopThread(1000);
+    }
+    hidThread.reset();
+}
+
+void AudioPluginAudioProcessor::hidPollingThreadFunction()
+{
+    while (!shouldStopHidThread.load() && connectedDevice) {
+        readHIDEvents();
+        juce::Thread::sleep(1);
+    }
+}
+
+void AudioPluginAudioProcessor::HIDPollingThread::run()
+{
+    processor.hidPollingThreadFunction();
 }
 
 //==============================================================================
