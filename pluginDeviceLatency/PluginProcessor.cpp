@@ -146,6 +146,12 @@ void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     }
     midiTriggerPending = false;
 
+    // Check for touch timeout (no HID events means finger lifted)
+    juce::int64 currentTime = juce::Time::currentTimeMillis();
+    if (touchActive.load(std::memory_order_relaxed) && (currentTime - lastTouchTime > touchTimeoutMs)) {
+        touchActive.store(false, std::memory_order_relaxed);
+    }
+
     // Check for touch events from polling thread
     bool currentTouchState = touchActive.load(std::memory_order_relaxed);
     bool touchStarted = touchTriggerPending || (currentTouchState && !previousTouchState);
