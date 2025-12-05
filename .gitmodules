@@ -1,6 +1,6 @@
 [submodule "hidapi"]
 	path = hidapi
-	url = https://github.com/libusb/hidapi.git
+	url = git@github.com:libusb/hidapi.git
 [submodule "JUCE"]
 	path = JUCE
 	url = git@github.com:DruwAudio/JUCE.git
