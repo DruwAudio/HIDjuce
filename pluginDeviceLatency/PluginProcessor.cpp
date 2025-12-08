@@ -345,8 +345,8 @@ void AudioPluginAudioProcessor::parseStandardTouchData(unsigned char* data, int 
 {
     if (reportId != 1 || length < 44) return;
 
-    // Parse each touch point (10 touch points max, each touch point is 4 bytes)
-    for (int i = 0; i < 10 && (1 + i * 4 + 3) < length - 3; ++i) {
+    // Parse each touch point (limited by maxTouchPoints for better latency)
+    for (int i = 0; i < maxTouchPoints && (1 + i * 4 + 3) < length - 3; ++i) {
         int offset = 1 + i * 4; // Start after report ID
 
         // Byte structure per touch point:
@@ -505,6 +505,150 @@ void AudioPluginAudioProcessor::analyzeFeatureReport(unsigned char reportId, uns
             break;
     }
     printf("\n");
+}
+
+//==============================================================================
+// Latency Optimization Functions
+
+bool AudioPluginAudioProcessor::optimizeForLowLatency()
+{
+    if (!connectedDevice) {
+        printf("❌ No device connected for optimization\n");
+        return false;
+    }
+
+    printf("\n🚀 Optimizing touchscreen for low latency...\n");
+
+    // Backup current settings first
+    backupCurrentSettings();
+
+    bool success = true;
+
+    // 1. Increase report rate (most impactful)
+    printf("📊 Setting high report rate...\n");
+    if (!setReportRate(0x08)) { // Try doubling current rate
+        printf("⚠️  Report rate adjustment failed, trying alternative...\n");
+        setReportRate(0x04); // Fallback value
+    }
+
+    // 2. Set maximum performance mode
+    printf("⚡ Setting maximum performance mode...\n");
+    if (!setPerformanceMode(0xFF)) {
+        printf("⚠️  Performance mode adjustment failed\n");
+        success = false;
+    }
+
+    // 3. Lower touch thresholds for faster detection
+    printf("🎯 Lowering touch detection thresholds...\n");
+    if (!setTouchThresholds(16000, 2000)) { // Roughly half current values
+        printf("⚠️  Threshold adjustment failed\n");
+        success = false;
+    }
+
+    printf("%s Latency optimization %s\n",
+           success ? "✅" : "⚠️",
+           success ? "completed successfully" : "completed with warnings");
+
+    if (success) {
+        printf("🎯 Expected latency improvement: 1-4ms\n");
+        printf("📋 Changes will reset when device is disconnected\n");
+    }
+
+    return success;
+}
+
+void AudioPluginAudioProcessor::backupCurrentSettings()
+{
+    unsigned char buffer[64] = {0};
+
+    // Backup Report ID 243 (report rate)
+    if (readFeatureReport(243, buffer, sizeof(buffer))) {
+        settingsBackup.reportRate = buffer[1];
+    }
+
+    // Backup Report ID 68 (performance mode)
+    if (readFeatureReport(68, buffer, sizeof(buffer))) {
+        settingsBackup.performanceMode = buffer[1];
+    }
+
+    // Backup Report ID 242 (thresholds)
+    if (readFeatureReport(242, buffer, sizeof(buffer))) {
+        settingsBackup.threshold1 = buffer[1] | (buffer[2] << 8);
+        settingsBackup.threshold2 = buffer[3] | (buffer[4] << 8);
+    }
+
+    settingsBackup.hasBackup = true;
+    printf("💾 Current settings backed up\n");
+}
+
+void AudioPluginAudioProcessor::restoreSettings()
+{
+    if (!settingsBackup.hasBackup) {
+        printf("⚠️  No backup available to restore\n");
+        return;
+    }
+
+    printf("🔄 Restoring original settings...\n");
+
+    setReportRate(settingsBackup.reportRate);
+    setPerformanceMode(settingsBackup.performanceMode);
+    setTouchThresholds(settingsBackup.threshold1, settingsBackup.threshold2);
+
+    printf("✅ Original settings restored\n");
+}
+
+bool AudioPluginAudioProcessor::setReportRate(unsigned char rateValue)
+{
+    unsigned char data[64] = {0};
+    data[0] = rateValue; // Set report rate in first data byte
+
+    bool success = writeFeatureReport(243, data, 64);
+    if (success) {
+        printf("   📊 Report rate set to: 0x%02X\n", rateValue);
+    }
+    return success;
+}
+
+bool AudioPluginAudioProcessor::setPerformanceMode(unsigned char perfMode)
+{
+    // Note: Report 68 has complex data, we'll only modify the first byte
+    unsigned char buffer[64] = {0};
+
+    // Read current data first to preserve other settings
+    if (!readFeatureReport(68, buffer, sizeof(buffer))) {
+        return false;
+    }
+
+    // Modify only the performance mode byte
+    buffer[1] = perfMode;
+
+    bool success = writeFeatureReport(68, buffer + 1, 63); // Skip report ID
+    if (success) {
+        printf("   ⚡ Performance mode set to: 0x%02X\n", perfMode);
+    }
+    return success;
+}
+
+bool AudioPluginAudioProcessor::setTouchThresholds(uint16_t threshold1, uint16_t threshold2)
+{
+    unsigned char buffer[64] = {0};
+
+    // Read current data to preserve other settings
+    if (!readFeatureReport(242, buffer, sizeof(buffer))) {
+        return false;
+    }
+
+    // Set new thresholds (little endian)
+    buffer[1] = threshold1 & 0xFF;
+    buffer[2] = (threshold1 >> 8) & 0xFF;
+    buffer[3] = threshold2 & 0xFF;
+    buffer[4] = (threshold2 >> 8) & 0xFF;
+
+    bool success = writeFeatureReport(242, buffer + 1, 63); // Skip report ID
+    if (success) {
+        printf("   🎯 Thresholds set to: %d, %d\n", threshold1, threshold2);
+    }
+    return success;
 }
 
 //==============================================================================

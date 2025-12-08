@@ -65,6 +65,14 @@ public:
     // Thread run method for reading HID events
     void run() override;
 
+    // Latency Optimization Functions (Public)
+    bool optimizeForLowLatency();
+    void restoreSettings();
+
+    // Touch point configuration (Public)
+    void setMaxTouchPoints(int maxPoints) { maxTouchPoints = maxPoints; }
+    int getMaxTouchPoints() const { return maxTouchPoints; }
+
 private:
     //==============================================================================
     // HID functionality
@@ -79,6 +87,13 @@ private:
     bool readFeatureReport(unsigned char reportId, unsigned char* buffer, int bufferSize);
     bool writeFeatureReport(unsigned char reportId, unsigned char* data, int dataSize);
     void analyzeFeatureReport(unsigned char reportId, unsigned char* data, int length);
+
+    // Internal latency optimization functions
+    bool setReportRate(unsigned char rateValue);
+    bool setPerformanceMode(unsigned char perfMode);
+    bool setTouchThresholds(uint16_t threshold1, uint16_t threshold2);
+    void backupCurrentSettings();
+
 
     // Optimized touch state packing/unpacking
     inline void setTouchState(uint16_t x, uint16_t y, bool active) {
@@ -110,6 +125,18 @@ private:
     // Cached coordinate validation ranges
     static constexpr uint16_t minValidCoord = 100;
     static constexpr uint16_t maxValidCoord = 30000;
+
+    // Settings backup for restoration
+    struct SettingsBackup {
+        unsigned char reportRate = 0;
+        unsigned char performanceMode = 0;
+        uint16_t threshold1 = 0;
+        uint16_t threshold2 = 0;
+        bool hasBackup = false;
+    } settingsBackup;
+
+    // Touch point configuration
+    int maxTouchPoints = 2; // Default to 2 fingers for optimal latency
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioPluginAudioProcessor)
 };
