@@ -144,12 +144,15 @@ void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 
     // Check for touch timeout (no HID events means finger lifted)
     juce::int64 currentTime = juce::Time::currentTimeMillis();
-    if (touchActive.load() && (currentTime - lastTouchTime > touchTimeoutMs)) {
-        touchActive.store(false);
+    uint16_t touchX_temp, touchY_temp;
+    bool currentTouchState = getTouchState(touchX_temp, touchY_temp);
+
+    if (currentTouchState && (currentTime - lastTouchTime > touchTimeoutMs)) {
+        setTouchState(0, 0, false);
+        currentTouchState = false;
     }
 
-    // Generate click impulse on touch start
-    bool currentTouchState = touchActive.load();
+    // Generate click impulse on touch start using optimized atomic
     bool touchStarted = currentTouchState && !previousTouchState;
     previousTouchState = currentTouchState;
 
@@ -257,7 +260,7 @@ void AudioPluginAudioProcessor::connectToDevice(const HIDDeviceInfo& device)
     connectedDeviceInfo = device;
 
     // Start timer to read events periodically
-    startTimer(1); // Read every 1ms for lowest latency
+    startTimer(0.5); // Read every 0.5ms for reduced latency
 }
 
 void AudioPluginAudioProcessor::disconnectFromDevice()
@@ -272,6 +275,13 @@ void AudioPluginAudioProcessor::disconnectFromDevice()
 
 void AudioPluginAudioProcessor::timerCallback()
 {
+    // Set real-time priority for minimal latency (only on first call)
+    static bool prioritySet = false;
+    if (!prioritySet) {
+        juce::Thread::setCurrentThreadPriority(10); // High priority
+        prioritySet = true;
+    }
+
     if (connectedDevice) {
         readHIDEvents();
     }
@@ -315,16 +325,15 @@ void AudioPluginAudioProcessor::parseELOTouchData(unsigned char* data, int lengt
     uint16_t touch1_x = data[2] | (data[3] << 8);
     uint16_t touch1_y = data[6] | (data[7] << 8);
 
-    // Detect active touches (reasonable coordinate range)
-    bool touch1_active = (touch1_x > 0 && touch1_x < 32000 && touch1_y > 0 && touch1_y < 32000);
+    // Optimized coordinate validation using cached ranges
+    bool touch1_active = (touch1_x >= minValidCoord && touch1_x <= maxValidCoord &&
+                          touch1_y >= minValidCoord && touch1_y <= maxValidCoord);
+
+    // Update touch state using optimized atomic communication
+    setTouchState(touch1_x, touch1_y, touch1_active);
 
     if (touch1_active) {
-        touchActive.store(true);
-        touchX.store(touch1_x);
-        touchY.store(touch1_y);
         lastTouchTime = juce::Time::currentTimeMillis();
-    } else {
-        touchActive.store(false);
     }
 }
 
@@ -343,26 +352,28 @@ void AudioPluginAudioProcessor::parseStandardTouchData(unsigned char* data, int 
 
         unsigned char firstByte = data[offset];
         bool tipSwitch = (firstByte & 0x01) != 0;
-        unsigned char contactId = (firstByte >> 3) & 0x1F;
+
+        // Early exit if no tip switch
+        if (!tipSwitch) continue;
 
         // X coordinate (2 bytes, little endian)
         uint16_t x = data[offset + 1] | (data[offset + 2] << 8);
-
         // Y coordinate (2 bytes, little endian)
         uint16_t y = data[offset + 3] | (data[offset + 4] << 8);
 
-        // Update touch state for the first active touch found
-        if (tipSwitch && x > 0 && y > 0) {
-            touchActive.store(true);
-            touchX.store(x);
-            touchY.store(y);
+        // Optimized coordinate validation using cached ranges
+        if (x >= minValidCoord && x <= maxValidCoord &&
+            y >= minValidCoord && y <= maxValidCoord) {
+
+            // Update touch state using optimized atomic communication
+            setTouchState(x, y, true);
             lastTouchTime = juce::Time::currentTimeMillis();
             return; // Use first active touch only
         }
     }
 
     // If we get here, no active touches were found
-    touchActive.store(false);
+    setTouchState(0, 0, false);
 }
 
 //==============================================================================
