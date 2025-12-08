@@ -15,7 +15,7 @@ struct HIDDeviceInfo {
 };
 
 //==============================================================================
-class AudioPluginAudioProcessor final : public juce::AudioProcessor, public juce::Timer
+class AudioPluginAudioProcessor final : public juce::AudioProcessor, public juce::Thread
 {
 public:
     //==============================================================================
@@ -62,8 +62,8 @@ public:
     bool isDeviceConnected() const { return connectedDevice != nullptr; }
     const HIDDeviceInfo& getConnectedDeviceInfo() const { return connectedDeviceInfo; }
 
-    // Timer callback for reading HID events
-    void timerCallback() override;
+    // Thread run method for reading HID events
+    void run() override;
 
 private:
     //==============================================================================

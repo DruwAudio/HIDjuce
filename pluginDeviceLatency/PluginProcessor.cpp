@@ -10,7 +10,7 @@ AudioPluginAudioProcessor::AudioPluginAudioProcessor()
                       #endif
                        .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
                      #endif
-                       )
+                       ), juce::Thread("HIDPollingThread")
 {
     // Initialize HID devices list
     enumerateHIDDevices();
@@ -19,6 +19,8 @@ AudioPluginAudioProcessor::AudioPluginAudioProcessor()
 AudioPluginAudioProcessor::~AudioPluginAudioProcessor()
 {
     disconnectFromDevice();
+    signalThreadShouldExit();
+    waitForThreadToExit(2000);
 }
 
 //==============================================================================
@@ -259,31 +261,30 @@ void AudioPluginAudioProcessor::connectToDevice(const HIDDeviceInfo& device)
     hid_set_nonblocking(connectedDevice, 1);
     connectedDeviceInfo = device;
 
-    // Start timer to read events periodically
-    startTimer(0.5); // Read every 0.5ms for reduced latency
+    // Start real-time thread for minimal latency HID polling
+    juce::Thread::RealtimeOptions realtimeOptions;
+    realtimeOptions.withPriority(8); // High priority (0-10 scale)
+    startRealtimeThread(realtimeOptions);
 }
 
 void AudioPluginAudioProcessor::disconnectFromDevice()
 {
     if (connectedDevice) {
-        stopTimer();
+        signalThreadShouldExit();
+        waitForThreadToExit(1000); // Wait up to 1 second for clean exit
         hid_close(connectedDevice);
         hid_exit();
         connectedDevice = nullptr;
     }
 }
 
-void AudioPluginAudioProcessor::timerCallback()
+void AudioPluginAudioProcessor::run()
 {
-    // Set real-time priority for minimal latency (only on first call)
-    static bool prioritySet = false;
-    if (!prioritySet) {
-        juce::Thread::setCurrentThreadPriority(10); // High priority
-        prioritySet = true;
-    }
-
-    if (connectedDevice) {
-        readHIDEvents();
+    while (!threadShouldExit()) {
+        if (connectedDevice) {
+            readHIDEvents();
+        }
+        wait(1); // Sleep for 1ms between polls
     }
 }
 
