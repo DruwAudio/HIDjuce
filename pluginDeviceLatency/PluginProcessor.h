@@ -74,6 +74,12 @@ private:
     void parseELOTouchData(unsigned char* data, int length, unsigned char reportId);
     void parseStandardTouchData(unsigned char* data, int length, unsigned char reportId);
 
+    // HID Feature Report Management
+    void queryAvailableFeatureReports();
+    bool readFeatureReport(unsigned char reportId, unsigned char* buffer, int bufferSize);
+    bool writeFeatureReport(unsigned char reportId, unsigned char* data, int dataSize);
+    void analyzeFeatureReport(unsigned char reportId, unsigned char* data, int length);
+
     // Optimized touch state packing/unpacking
     inline void setTouchState(uint16_t x, uint16_t y, bool active) {
         uint64_t packed = ((uint64_t)x) | (((uint64_t)y) << 16) |

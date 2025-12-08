@@ -261,6 +261,9 @@ void AudioPluginAudioProcessor::connectToDevice(const HIDDeviceInfo& device)
     hid_set_nonblocking(connectedDevice, 1);
     connectedDeviceInfo = device;
 
+    // Query available feature reports to analyze device capabilities
+    queryAvailableFeatureReports();
+
     // Start real-time thread for minimal latency HID polling
     juce::Thread::RealtimeOptions realtimeOptions;
     realtimeOptions.withPriority(8); // High priority (0-10 scale)
@@ -375,6 +378,133 @@ void AudioPluginAudioProcessor::parseStandardTouchData(unsigned char* data, int 
 
     // If we get here, no active touches were found
     setTouchState(0, 0, false);
+}
+
+//==============================================================================
+// HID Feature Report Management
+
+void AudioPluginAudioProcessor::queryAvailableFeatureReports()
+{
+    if (!connectedDevice) {
+        printf("No device connected for feature report query\n");
+        return;
+    }
+
+    printf("\n=== HID Feature Reports Analysis ===\n");
+    printf("Device: %s %s\n", connectedDeviceInfo.manufacturer.toUTF8(),
+           connectedDeviceInfo.product.toUTF8());
+    printf("VID: 0x%04X, PID: 0x%04X\n\n",
+           connectedDeviceInfo.vendorId, connectedDeviceInfo.productId);
+
+    // List of feature report IDs from your descriptor
+    std::vector<unsigned char> featureReportIds = {
+        66,   // Standard touch configuration
+        68,   // Standard touch configuration
+        240,  // Vendor specific (4 bytes)
+        242,  // Vendor specific (4 bytes)
+        243,  // Vendor specific (61 bytes)
+        6,    // Vendor specific (7 bytes)
+        7,    // Vendor specific (63 bytes)
+        8,    // Vendor specific (63 bytes)
+        9     // Vendor specific (1 byte)
+    };
+
+    for (unsigned char reportId : featureReportIds) {
+        unsigned char buffer[64] = {0}; // Max size for most reports
+
+        if (readFeatureReport(reportId, buffer, sizeof(buffer))) {
+            analyzeFeatureReport(reportId, buffer, sizeof(buffer));
+        } else {
+            printf("Report ID %d: Not accessible or not supported\n", reportId);
+        }
+    }
+
+    printf("=== End Feature Reports Analysis ===\n\n");
+}
+
+bool AudioPluginAudioProcessor::readFeatureReport(unsigned char reportId, unsigned char* buffer, int bufferSize)
+{
+    if (!connectedDevice) return false;
+
+    buffer[0] = reportId;
+    int result = hid_get_feature_report(connectedDevice, buffer, bufferSize);
+
+    return result > 0;
+}
+
+bool AudioPluginAudioProcessor::writeFeatureReport(unsigned char reportId, unsigned char* data, int dataSize)
+{
+    if (!connectedDevice) return false;
+
+    unsigned char buffer[65] = {0}; // +1 for report ID
+    buffer[0] = reportId;
+    memcpy(buffer + 1, data, dataSize);
+
+    int result = hid_send_feature_report(connectedDevice, buffer, dataSize + 1);
+    return result >= 0;
+}
+
+void AudioPluginAudioProcessor::analyzeFeatureReport(unsigned char reportId, unsigned char* data, int length)
+{
+    printf("📋 Report ID %d: ", reportId);
+
+    // Print raw data
+    printf("Data [%d bytes]: ", length);
+    for (int i = 1; i < std::min(16, length); ++i) { // Skip report ID byte
+        printf("%02X ", data[i]);
+    }
+    if (length > 16) printf("...");
+    printf("\n");
+
+    // Analyze specific report types based on known patterns
+    switch (reportId) {
+        case 66:
+            printf("  📱 Touch Configuration Report\n");
+            if (length > 2) {
+                printf("    Touch Mode: 0x%02X\n", data[1]);
+                printf("    Settings: 0x%02X\n", data[2]);
+            }
+            break;
+
+        case 68:
+            printf("  ⚡ Performance/Latency Settings\n");
+            if (length > 1) {
+                printf("    Performance Mode: 0x%02X\n", data[1]);
+            }
+            break;
+
+        case 240:
+            printf("  🔧 Vendor Configuration (4 bytes)\n");
+            if (length > 4) {
+                printf("    Config Bytes: %02X %02X %02X %02X\n",
+                       data[1], data[2], data[3], data[4]);
+            }
+            break;
+
+        case 242:
+            printf("  📊 Touch Sensitivity/Thresholds\n");
+            if (length > 4) {
+                uint16_t threshold1 = data[1] | (data[2] << 8);
+                uint16_t threshold2 = data[3] | (data[4] << 8);
+                printf("    Threshold 1: %d\n", threshold1);
+                printf("    Threshold 2: %d\n", threshold2);
+            }
+            break;
+
+        case 243:
+            printf("  🚀 Extended Configuration (61 bytes)\n");
+            printf("    Report Rate Config: 0x%02X\n", data[1]);
+            if (length > 5) {
+                printf("    Power Management: 0x%02X\n", data[5]);
+                printf("    Filter Settings: 0x%02X\n", data[10]);
+            }
+            break;
+
+        default:
+            printf("  ❓ Unknown/Vendor Specific\n");
+            break;
+    }
+    printf("\n");
 }
 
 //==============================================================================
