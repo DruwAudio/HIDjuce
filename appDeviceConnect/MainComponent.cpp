@@ -272,6 +272,10 @@ void MainComponent::parseInputReport(unsigned char* data, int length)
         if (connectedDeviceInfo.vendorId == 0x03EB && connectedDeviceInfo.productId == 0x8A6E) {
             parseELOTouchData(data, length, reportId);
         }
+        // Standard HID multi-touch digitizer parsing for new touchscreen
+        else if (connectedDeviceInfo.vendorId == 0x2575 && connectedDeviceInfo.productId == 0x7317 && reportId == 1) {
+            parseStandardTouchData(data, length, reportId);
+        }
         // Standard keyboard parsing
         else if (length >= 8 && reportId == 0x01) {
             printf("  Modifier keys: 0x%02X\n", data[1]);
@@ -583,4 +587,46 @@ void MainComponent::parseELOTouchData(unsigned char* data, int length, unsigned 
     if (length > 15 && data[15] != 0) {
         printf("  Additional: 0x%02X\n", data[15]);
     }
+}
+
+void MainComponent::parseStandardTouchData(unsigned char* data, int length, unsigned char reportId)
+{
+    if (reportId != 1 || length < 44) return;
+
+    printf("  🟢 Standard Multi-Touch Report:\n");
+
+    // Extract contact count (last byte before scan time)
+    unsigned char contactCount = data[length - 1];
+    printf("    Contact Count: %d\n", contactCount);
+
+    // Extract scan time (2 bytes before contact count)
+    uint16_t scanTime = data[length - 3] | (data[length - 2] << 8);
+    printf("    Scan Time: %d\n", scanTime);
+
+    // Parse each touch point (10 touch points max, each touch point is 4 bytes)
+    for (int i = 0; i < 10 && (1 + i * 4 + 3) < length - 3; ++i) {
+        int offset = 1 + i * 4; // Start after report ID
+
+        // Byte structure per touch point:
+        // Byte 0: Tip switch (bit 0) + padding (bits 1-2) + Contact ID (bits 3-7)
+        // Bytes 1-2: X coordinate (16 bits, little endian)
+        // Bytes 3-4: Y coordinate (16 bits, little endian)
+
+        unsigned char firstByte = data[offset];
+        bool tipSwitch = (firstByte & 0x01) != 0;
+        unsigned char contactId = (firstByte >> 3) & 0x1F;
+
+        // X coordinate (2 bytes, little endian)
+        uint16_t x = data[offset + 1] | (data[offset + 2] << 8);
+
+        // Y coordinate (2 bytes, little endian)
+        uint16_t y = data[offset + 3] | (data[offset + 4] << 8);
+
+        // Only report active touches
+        if (tipSwitch && x > 0 && y > 0) {
+            printf("    👆 Touch %d (ID: %d): X=%d, Y=%d\n", i + 1, contactId, x, y);
+        }
+    }
+
+    printf("---\n");
 }
