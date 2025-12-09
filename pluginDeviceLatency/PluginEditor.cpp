@@ -15,12 +15,12 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor (AudioPluginAud
     addAndMakeVisible(statusLabel);
 
     // Setup latency optimization controls
-    optimizeButton.setButtonText("🚀 Optimize for Low Latency");
+    optimizeButton.setButtonText("Optimize for Low Latency");
     optimizeButton.addListener(this);
     optimizeButton.setEnabled(false); // Disabled until device connected
     addAndMakeVisible(optimizeButton);
 
-    restoreButton.setButtonText("🔄 Restore Original Settings");
+    restoreButton.setButtonText("Restore Original Settings");
     restoreButton.addListener(this);
     restoreButton.setEnabled(false);
     addAndMakeVisible(restoreButton);
@@ -34,9 +34,30 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor (AudioPluginAud
     optimizationStatus.setColour(juce::Label::textColourId, juce::Colours::grey);
     addAndMakeVisible(optimizationStatus);
 
+    // Setup diagnostic display
+    diagnosticsHeader.setText("HID Report Diagnostics:", juce::dontSendNotification);
+    diagnosticsHeader.setFont(juce::Font(14.0f, juce::Font::bold));
+    diagnosticsHeader.setColour(juce::Label::textColourId, juce::Colours::lightblue);
+    addAndMakeVisible(diagnosticsHeader);
+
+    reportRateLabel.setText("Report Rate: --", juce::dontSendNotification);
+    reportRateLabel.setFont(juce::Font(12.0f, juce::Font::plain));
+    addAndMakeVisible(reportRateLabel);
+
+    avgIntervalLabel.setText("Avg Interval: --", juce::dontSendNotification);
+    avgIntervalLabel.setFont(juce::Font(12.0f, juce::Font::plain));
+    addAndMakeVisible(avgIntervalLabel);
+
+    minMaxIntervalLabel.setText("Min/Max: --", juce::dontSendNotification);
+    minMaxIntervalLabel.setFont(juce::Font(12.0f, juce::Font::plain));
+    addAndMakeVisible(minMaxIntervalLabel);
+
     populateDeviceComboBox();
 
-    setSize (450, 220);
+    // Start timer to update diagnostic display (100ms refresh rate)
+    startTimer(100);
+
+    setSize (450, 320);
 }
 
 AudioPluginAudioProcessorEditor::~AudioPluginAudioProcessorEditor()
@@ -73,6 +94,14 @@ void AudioPluginAudioProcessorEditor::resized()
     twoFingerToggle.setBounds(area.removeFromTop(25));
     area.removeFromTop(5);
     optimizationStatus.setBounds(area.removeFromTop(20));
+
+    area.removeFromTop(10); // Separator
+
+    // Diagnostic section
+    diagnosticsHeader.setBounds(area.removeFromTop(20));
+    reportRateLabel.setBounds(area.removeFromTop(18));
+    avgIntervalLabel.setBounds(area.removeFromTop(18));
+    minMaxIntervalLabel.setBounds(area.removeFromTop(18));
 }
 
 void AudioPluginAudioProcessorEditor::comboBoxChanged(juce::ComboBox* comboBoxThatHasChanged)
@@ -127,7 +156,7 @@ void AudioPluginAudioProcessorEditor::buttonClicked(juce::Button* button)
         }
         else
         {
-            optimizationStatus.setText("⚠️ Optimization completed with warnings", juce::dontSendNotification);
+            optimizationStatus.setText("Optimization completed with warnings", juce::dontSendNotification);
             optimizationStatus.setColour(juce::Label::textColourId, juce::Colours::orange);
             restoreButton.setEnabled(true);
         }
@@ -135,7 +164,7 @@ void AudioPluginAudioProcessorEditor::buttonClicked(juce::Button* button)
     else if (button == &restoreButton)
     {
         processorRef.restoreSettings();
-        optimizationStatus.setText("🔄 Original settings restored", juce::dontSendNotification);
+        optimizationStatus.setText("Original settings restored", juce::dontSendNotification);
         optimizationStatus.setColour(juce::Label::textColourId, juce::Colours::blue);
 
         restoreButton.setEnabled(false);
@@ -168,4 +197,66 @@ void AudioPluginAudioProcessorEditor::populateDeviceComboBox()
     }
 
     deviceComboBox.setSelectedId(1);
+}
+
+void AudioPluginAudioProcessorEditor::timerCallback()
+{
+    updateDiagnosticDisplay();
+}
+
+void AudioPluginAudioProcessorEditor::updateDiagnosticDisplay()
+{
+    if (!processorRef.isDeviceConnected())
+    {
+        reportRateLabel.setText("Report Rate: -- (no device)", juce::dontSendNotification);
+        avgIntervalLabel.setText("Avg Interval: --", juce::dontSendNotification);
+        minMaxIntervalLabel.setText("Min/Max: --", juce::dontSendNotification);
+        return;
+    }
+
+    auto stats = processorRef.getLatencyStats();
+
+    if (stats.sampleCount > 0)
+    {
+        // Display report rate in Hz
+        reportRateLabel.setText(
+            juce::String::formatted("Report Rate: %.1f Hz (%.2f ms)",
+                                   stats.currentReportRateHz,
+                                   stats.avgIntervalMs),
+            juce::dontSendNotification);
+
+        // Display average interval
+        avgIntervalLabel.setText(
+            juce::String::formatted("Avg Interval: %.2f ms (%d samples)",
+                                   stats.avgIntervalMs,
+                                   stats.sampleCount),
+            juce::dontSendNotification);
+
+        // Display min/max intervals
+        minMaxIntervalLabel.setText(
+            juce::String::formatted("Min/Max: %.2f / %.2f ms",
+                                   stats.minIntervalMs,
+                                   stats.maxIntervalMs),
+            juce::dontSendNotification);
+
+        // Color code based on report rate quality
+        juce::Colour rateColor;
+        if (stats.currentReportRateHz >= 200.0) {
+            rateColor = juce::Colours::green;  // Excellent
+        } else if (stats.currentReportRateHz >= 120.0) {
+            rateColor = juce::Colours::lightgreen;  // Good
+        } else if (stats.currentReportRateHz >= 60.0) {
+            rateColor = juce::Colours::orange;  // Moderate
+        } else {
+            rateColor = juce::Colours::red;  // Poor
+        }
+        reportRateLabel.setColour(juce::Label::textColourId, rateColor);
+    }
+    else
+    {
+        reportRateLabel.setText("Report Rate: Waiting for touch events...", juce::dontSendNotification);
+        reportRateLabel.setColour(juce::Label::textColourId, juce::Colours::grey);
+        avgIntervalLabel.setText("Avg Interval: --", juce::dontSendNotification);
+        minMaxIntervalLabel.setText("Min/Max: --", juce::dontSendNotification);
+    }
 }

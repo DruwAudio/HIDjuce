@@ -73,6 +73,16 @@ public:
     void setMaxTouchPoints(int maxPoints) { maxTouchPoints = maxPoints; }
     int getMaxTouchPoints() const { return maxTouchPoints; }
 
+    // Diagnostic statistics (Public)
+    struct LatencyStats {
+        double currentReportRateHz = 0.0;
+        double minIntervalMs = 0.0;
+        double maxIntervalMs = 0.0;
+        double avgIntervalMs = 0.0;
+        int sampleCount = 0;
+    };
+    LatencyStats getLatencyStats() const;
+
 private:
     //==============================================================================
     // HID functionality
@@ -137,6 +147,16 @@ private:
 
     // Touch point configuration
     int maxTouchPoints = 2; // Default to 2 fingers for optimal latency
+
+    // Diagnostic timing measurements
+    juce::int64 lastReportTimeUs = 0;  // Microsecond timestamp of last HID report
+    std::atomic<double> reportIntervalMs{0.0};  // Most recent interval in ms
+    std::atomic<double> minReportIntervalMs{999999.0};
+    std::atomic<double> maxReportIntervalMs{0.0};
+    std::atomic<double> avgReportIntervalMs{0.0};
+    std::atomic<int> reportCount{0};
+    double runningIntervalSum = 0.0;  // For calculating average (not atomic, accessed from HID thread only)
+
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioPluginAudioProcessor)
 };

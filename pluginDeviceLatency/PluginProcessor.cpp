@@ -261,6 +261,15 @@ void AudioPluginAudioProcessor::connectToDevice(const HIDDeviceInfo& device)
     hid_set_nonblocking(connectedDevice, 1);
     connectedDeviceInfo = device;
 
+    // Reset diagnostic statistics
+    lastReportTimeUs = 0;
+    reportIntervalMs.store(0.0, std::memory_order_relaxed);
+    minReportIntervalMs.store(999999.0, std::memory_order_relaxed);
+    maxReportIntervalMs.store(0.0, std::memory_order_relaxed);
+    avgReportIntervalMs.store(0.0, std::memory_order_relaxed);
+    reportCount.store(0, std::memory_order_relaxed);
+    runningIntervalSum = 0.0;
+
     // Query available feature reports to analyze device capabilities
     queryAvailableFeatureReports();
 
@@ -310,6 +319,10 @@ void AudioPluginAudioProcessor::parseInputReport(unsigned char* data, int length
     if (length > 0) {
         unsigned char reportId = data[0];
 
+        // Store current touch state before parsing
+        uint16_t dummy_x, dummy_y;
+        bool wasTouchActive = getTouchState(dummy_x, dummy_y);
+
         // ELO Touch parsing for Atmel maXTouch
         if (connectedDeviceInfo.vendorId == 0x03EB && connectedDeviceInfo.productId == 0x8A6E) {
             parseELOTouchData(data, length, reportId);
@@ -317,6 +330,42 @@ void AudioPluginAudioProcessor::parseInputReport(unsigned char* data, int length
         // Standard HID multi-touch digitizer parsing for new touchscreen
         else if (connectedDeviceInfo.vendorId == 0x2575 && connectedDeviceInfo.productId == 0x7317 && reportId == 1) {
             parseStandardTouchData(data, length, reportId);
+        }
+
+        // Measure HID report timing ONLY for active touch reports
+        bool isTouchActive = getTouchState(dummy_x, dummy_y);
+
+        if (isTouchActive) {
+            juce::int64 currentTimeTicks = juce::Time::getHighResolutionTicks();
+
+            // Only measure interval if previous report also had active touch
+            if (wasTouchActive && lastReportTimeUs > 0) {
+                // Calculate interval between reports (convert ticks to milliseconds)
+                juce::int64 ticksPerSecond = juce::Time::getHighResolutionTicksPerSecond();
+                double intervalSeconds = (double)(currentTimeTicks - lastReportTimeUs) / (double)ticksPerSecond;
+                double intervalMs = intervalSeconds * 1000.0;
+
+                // Update statistics
+                reportIntervalMs.store(intervalMs, std::memory_order_relaxed);
+
+                // Update min/max
+                double currentMin = minReportIntervalMs.load(std::memory_order_relaxed);
+                if (intervalMs < currentMin) {
+                    minReportIntervalMs.store(intervalMs, std::memory_order_relaxed);
+                }
+
+                double currentMax = maxReportIntervalMs.load(std::memory_order_relaxed);
+                if (intervalMs > currentMax) {
+                    maxReportIntervalMs.store(intervalMs, std::memory_order_relaxed);
+                }
+
+                // Update running average
+                runningIntervalSum += intervalMs;
+                int count = reportCount.fetch_add(1, std::memory_order_relaxed) + 1;
+                avgReportIntervalMs.store(runningIntervalSum / count, std::memory_order_relaxed);
+            }
+
+            lastReportTimeUs = currentTimeTicks;
         }
     }
 }
@@ -649,6 +698,27 @@ bool AudioPluginAudioProcessor::setTouchThresholds(uint16_t threshold1, uint16_t
         printf("   🎯 Thresholds set to: %d, %d\n", threshold1, threshold2);
     }
     return success;
+}
+
+//==============================================================================
+// Diagnostic Statistics
+
+AudioPluginAudioProcessor::LatencyStats AudioPluginAudioProcessor::getLatencyStats() const
+{
+    LatencyStats stats;
+
+    double avgInterval = avgReportIntervalMs.load(std::memory_order_relaxed);
+    stats.avgIntervalMs = avgInterval;
+    stats.minIntervalMs = minReportIntervalMs.load(std::memory_order_relaxed);
+    stats.maxIntervalMs = maxReportIntervalMs.load(std::memory_order_relaxed);
+    stats.sampleCount = reportCount.load(std::memory_order_relaxed);
+
+    // Convert average interval to Hz
+    if (avgInterval > 0.0) {
+        stats.currentReportRateHz = 1000.0 / avgInterval;
+    }
+
+    return stats;
 }
 
 //==============================================================================
