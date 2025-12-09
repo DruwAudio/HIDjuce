@@ -52,12 +52,17 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor (AudioPluginAud
     minMaxIntervalLabel.setFont(juce::Font(12.0f, juce::Font::plain));
     addAndMakeVisible(minMaxIntervalLabel);
 
+    audioLatencyLabel.setText("Audio Latency: --", juce::dontSendNotification);
+    audioLatencyLabel.setFont(juce::Font(12.0f, juce::Font::plain));
+    audioLatencyLabel.setColour(juce::Label::textColourId, juce::Colours::yellow);
+    addAndMakeVisible(audioLatencyLabel);
+
     populateDeviceComboBox();
 
     // Start timer to update diagnostic display (100ms refresh rate)
     startTimer(100);
 
-    setSize (450, 320);
+    setSize (450, 340);
 }
 
 AudioPluginAudioProcessorEditor::~AudioPluginAudioProcessorEditor()
@@ -102,6 +107,7 @@ void AudioPluginAudioProcessorEditor::resized()
     reportRateLabel.setBounds(area.removeFromTop(18));
     avgIntervalLabel.setBounds(area.removeFromTop(18));
     minMaxIntervalLabel.setBounds(area.removeFromTop(18));
+    audioLatencyLabel.setBounds(area.removeFromTop(18));
 }
 
 void AudioPluginAudioProcessorEditor::comboBoxChanged(juce::ComboBox* comboBoxThatHasChanged)
@@ -176,8 +182,8 @@ void AudioPluginAudioProcessorEditor::buttonClicked(juce::Button* button)
         processorRef.setMaxTouchPoints(twoFingerMode ? 2 : 10);
 
         optimizationStatus.setText(twoFingerMode ?
-                                  "🎯 2-finger mode: Faster parsing" :
-                                  "👐 10-finger mode: Full multi-touch",
+                                  "2-finger mode: Faster parsing" :
+                                  "10-finger mode: Full multi-touch",
                                   juce::dontSendNotification);
         optimizationStatus.setColour(juce::Label::textColourId,
                                     twoFingerMode ? juce::Colours::green : juce::Colours::grey);
@@ -206,6 +212,44 @@ void AudioPluginAudioProcessorEditor::timerCallback()
 
 void AudioPluginAudioProcessorEditor::updateDiagnosticDisplay()
 {
+    // Get audio setup info from processor
+    auto audioInfo = processorRef.getAudioSetupInfo();
+
+    if (audioInfo.sampleRate > 0)
+    {
+        double bufferMs = (audioInfo.bufferSize * 1000.0) / audioInfo.sampleRate;
+        double totalLatencyMs = (audioInfo.totalLatencySamples * 1000.0) / audioInfo.sampleRate;
+
+        audioLatencyLabel.setText(
+            juce::String::formatted("Audio: Buffer=%d smp (%.2f ms), Total Latency=%.2f ms @ %.0f Hz",
+                                   audioInfo.bufferSize,
+                                   bufferMs,
+                                   totalLatencyMs,
+                                   audioInfo.sampleRate),
+            juce::dontSendNotification);
+
+        // Calculate expected minimum end-to-end latency
+        auto touchStats = processorRef.getLatencyStats();
+        if (touchStats.sampleCount > 0)
+        {
+            double expectedMinLatency = touchStats.avgIntervalMs + bufferMs + 2.0; // +2ms for USB/processing overhead
+            double unexplainedLatency = 37.0 - expectedMinLatency; // Your measured 37ms
+
+            if (unexplainedLatency > 5.0)
+            {
+                audioLatencyLabel.setColour(juce::Label::textColourId, juce::Colours::orange);
+            }
+            else
+            {
+                audioLatencyLabel.setColour(juce::Label::textColourId, juce::Colours::lightgreen);
+            }
+        }
+    }
+    else
+    {
+        audioLatencyLabel.setText("Audio: Not initialized", juce::dontSendNotification);
+    }
+
     if (!processorRef.isDeviceConnected())
     {
         reportRateLabel.setText("Report Rate: -- (no device)", juce::dontSendNotification);

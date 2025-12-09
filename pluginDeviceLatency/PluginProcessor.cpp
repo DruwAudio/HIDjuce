@@ -91,9 +91,13 @@ void AudioPluginAudioProcessor::changeProgramName (int index, const juce::String
 //==============================================================================
 void AudioPluginAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    // Use this method as the place to do any pre-playback
-    // initialisation that you need..
-    juce::ignoreUnused (sampleRate, samplesPerBlock);
+    // Store audio setup info for diagnostics
+    currentSampleRate.store(sampleRate, std::memory_order_relaxed);
+    currentBufferSize.store(samplesPerBlock, std::memory_order_relaxed);
+
+    // Calculate total latency (buffer + any reported latency from the system)
+    int totalLatency = samplesPerBlock + getLatencySamples();
+    currentTotalLatencySamples.store(totalLatency, std::memory_order_relaxed);
 }
 
 void AudioPluginAudioProcessor::releaseResources()
@@ -719,6 +723,15 @@ AudioPluginAudioProcessor::LatencyStats AudioPluginAudioProcessor::getLatencySta
     }
 
     return stats;
+}
+
+AudioPluginAudioProcessor::AudioSetupInfo AudioPluginAudioProcessor::getAudioSetupInfo() const
+{
+    AudioSetupInfo info;
+    info.sampleRate = currentSampleRate.load(std::memory_order_relaxed);
+    info.bufferSize = currentBufferSize.load(std::memory_order_relaxed);
+    info.totalLatencySamples = currentTotalLatencySamples.load(std::memory_order_relaxed);
+    return info;
 }
 
 //==============================================================================

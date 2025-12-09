@@ -83,6 +83,14 @@ public:
     };
     LatencyStats getLatencyStats() const;
 
+    // Audio setup info (Public)
+    struct AudioSetupInfo {
+        double sampleRate = 0.0;
+        int bufferSize = 0;
+        int totalLatencySamples = 0;
+    };
+    AudioSetupInfo getAudioSetupInfo() const;
+
 private:
     //==============================================================================
     // HID functionality
@@ -156,6 +164,11 @@ private:
     std::atomic<double> avgReportIntervalMs{0.0};
     std::atomic<int> reportCount{0};
     double runningIntervalSum = 0.0;  // For calculating average (not atomic, accessed from HID thread only)
+
+    // Audio setup info
+    std::atomic<double> currentSampleRate{0.0};
+    std::atomic<int> currentBufferSize{0};
+    std::atomic<int> currentTotalLatencySamples{0};
 
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioPluginAudioProcessor)

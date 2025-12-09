@@ -42,6 +42,7 @@ private:
     juce::Label reportRateLabel;
     juce::Label avgIntervalLabel;
     juce::Label minMaxIntervalLabel;
+    juce::Label audioLatencyLabel;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioPluginAudioProcessorEditor)
 };
