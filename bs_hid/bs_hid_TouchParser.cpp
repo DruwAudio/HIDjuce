@@ -1,0 +1,78 @@
+/*
+  ==============================================================================
+
+   Touch Parser Implementation
+
+  ==============================================================================
+*/
+
+// This file should only be included via bs_hid.cpp
+// But if compiled standalone, include the necessary headers
+#ifndef BS_HID_H_INCLUDED
+    #include "bs_hid.h"
+#endif
+
+namespace bs
+{
+
+TouchData TouchParser::parseELOTouch(const unsigned char* data, int length, unsigned char reportId)
+{
+    if (reportId != 1 || length < 59)
+        return TouchData();
+
+    // Extract primary touch coordinates
+    uint16_t touch_x = data[2] | (data[3] << 8);
+    uint16_t touch_y = data[6] | (data[7] << 8);
+
+    // Validate coordinates
+    bool isValid = isValidCoordinate(touch_x, touch_y);
+
+    return TouchData(touch_x, touch_y, isValid, juce::Time::currentTimeMillis());
+}
+
+TouchData TouchParser::parseStandardTouch(const unsigned char* data, int length,
+                                         unsigned char reportId, int maxTouchPoints)
+{
+    if (reportId != 1 || length < 44)
+        return TouchData();
+
+    // Parse each touch point (limited by maxTouchPoints for better latency)
+    for (int i = 0; i < maxTouchPoints && (1 + i * 4 + 3) < length - 3; ++i)
+    {
+        int offset = 1 + i * 4; // Start after report ID
+
+        // Byte structure per touch point:
+        // Byte 0: Tip switch (bit 0) + padding (bits 1-2) + Contact ID (bits 3-7)
+        // Bytes 1-2: X coordinate (16 bits, little endian)
+        // Bytes 3-4: Y coordinate (16 bits, little endian)
+
+        unsigned char firstByte = data[offset];
+        bool tipSwitch = (firstByte & 0x01) != 0;
+
+        // Early exit if no tip switch
+        if (!tipSwitch)
+            continue;
+
+        // X coordinate (2 bytes, little endian)
+        uint16_t x = data[offset + 1] | (data[offset + 2] << 8);
+        // Y coordinate (2 bytes, little endian)
+        uint16_t y = data[offset + 3] | (data[offset + 4] << 8);
+
+        // Validate coordinates
+        if (isValidCoordinate(x, y))
+        {
+            return TouchData(x, y, true, juce::Time::currentTimeMillis());
+        }
+    }
+
+    // No active touches found
+    return TouchData(0, 0, false, juce::Time::currentTimeMillis());
+}
+
+bool TouchParser::isValidCoordinate(uint16_t x, uint16_t y)
+{
+    return x >= minValidCoord && x <= maxValidCoord &&
+           y >= minValidCoord && y <= maxValidCoord;
+}
+
+} // namespace bs

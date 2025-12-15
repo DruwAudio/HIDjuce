@@ -12,10 +12,13 @@ AudioPluginAudioProcessor::AudioPluginAudioProcessor()
                      #endif
                        )
 {
+    // Register as listener for touch events
+    hidDeviceManager.addListener(this);
 }
 
 AudioPluginAudioProcessor::~AudioPluginAudioProcessor()
 {
+    hidDeviceManager.removeListener(this);
 }
 
 //==============================================================================
@@ -130,26 +133,26 @@ void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     auto totalNumInputChannels  = getTotalNumInputChannels();
     auto totalNumOutputChannels = getTotalNumOutputChannels();
 
-    // In case we have more outputs than inputs, this code clears any output
-    // channels that didn't contain input data, (because these aren't
-    // guaranteed to be empty - they may contain garbage).
-    // This is here to avoid people getting screaming feedback
-    // when they first compile a plugin, but obviously you don't need to keep
-    // this code if your algorithm always overwrites all the output channels.
+    // Clear unused output channels
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
         buffer.clear (i, 0, buffer.getNumSamples());
 
-    // This is the place where you'd normally do the guts of your plugin's
-    // audio processing...
-    // Make sure to reset the state if your inner loop is processing
-    // the samples and the outer loop is handling the channels.
-    // Alternatively, you can process the samples with the channels
-    // interleaved by keeping the same state.
-    for (int channel = 0; channel < totalNumInputChannels; ++channel)
+    // Get current touch state
+    auto touchData = hidDeviceManager.getLatestTouchData();
+    bool touchStarted = touchData.isActive && !previousTouchState;
+    previousTouchState = touchData.isActive;
+
+    // Generate click impulse on touch start
+    if (touchStarted)
     {
-        auto* channelData = buffer.getWritePointer (channel);
-        juce::ignoreUnused (channelData);
-        // ..do something to the data...
+        for (int channel = 0; channel < totalNumOutputChannels; ++channel)
+        {
+            auto* channelData = buffer.getWritePointer(channel);
+            if (buffer.getNumSamples() > 0)
+            {
+                channelData[0] = 0.5f; // Single impulse at first sample
+            }
+        }
     }
 }
 
@@ -178,6 +181,41 @@ void AudioPluginAudioProcessor::setStateInformation (const void* data, int sizeI
     // You should use this method to restore your parameters from this memory block,
     // whose contents will have been created by the getStateInformation() call.
     juce::ignoreUnused (data, sizeInBytes);
+}
+
+//==============================================================================
+// HID Device Management
+
+std::vector<bs::HIDDeviceInfo> AudioPluginAudioProcessor::getAvailableHIDDevices()
+{
+    return hidDeviceManager.getAvailableDevices();
+}
+
+void AudioPluginAudioProcessor::connectToDevice(const bs::HIDDeviceInfo& device)
+{
+    hidDeviceManager.connectToDevice(device);
+}
+
+void AudioPluginAudioProcessor::disconnectFromDevice()
+{
+    hidDeviceManager.disconnectFromDevice();
+}
+
+bool AudioPluginAudioProcessor::isDeviceConnected() const
+{
+    return hidDeviceManager.isDeviceConnected();
+}
+
+const bs::HIDDeviceInfo& AudioPluginAudioProcessor::getConnectedDeviceInfo() const
+{
+    return hidDeviceManager.getConnectedDeviceInfo();
+}
+
+void AudioPluginAudioProcessor::touchDetected(const bs::TouchData& touchData)
+{
+    // This callback is called from the HID polling thread
+    // You can log, update UI, or trigger other events here
+    DBG("Touch detected: x=" << touchData.x << " y=" << touchData.y << " active=" << (touchData.isActive ? "true" : "false"));
 }
 
 //==============================================================================

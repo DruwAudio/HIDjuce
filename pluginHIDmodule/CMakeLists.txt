@@ -68,12 +68,13 @@ target_sources(HIDmodulePlugin
     PRIVATE
         PluginEditor.cpp
         PluginProcessor.cpp
-        ../hidapi/hidapi/hidapi.h
         ../hidapi/mac/hid.c
         )
 
-        
-# Add include directories for HIDapi
+# Add bs_hid module as a JUCE module
+juce_add_module(../bs_hid)
+
+# Add include directories for bs_hid module dependencies
 target_include_directories(HIDmodulePlugin PRIVATE
     ../hidapi/hidapi
 )
@@ -111,6 +112,7 @@ target_link_libraries(HIDmodulePlugin
     PRIVATE
         # AudioPluginData           # If we'd created a binary data target, we'd link to it here
         juce::juce_audio_utils
+        bs_hid
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags

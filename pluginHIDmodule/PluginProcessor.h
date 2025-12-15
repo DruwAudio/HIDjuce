@@ -1,9 +1,11 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <bs_hid/bs_hid.h>
 
 //==============================================================================
-class AudioPluginAudioProcessor final : public juce::AudioProcessor
+class AudioPluginAudioProcessor final : public juce::AudioProcessor,
+                                       public bs::HIDDeviceManager::Listener
 {
 public:
     //==============================================================================
@@ -42,7 +44,27 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
+    //==============================================================================
+    // HID Device Management
+    std::vector<bs::HIDDeviceInfo> getAvailableHIDDevices();
+    void connectToDevice(const bs::HIDDeviceInfo& device);
+    void disconnectFromDevice();
+    bool isDeviceConnected() const;
+    const bs::HIDDeviceInfo& getConnectedDeviceInfo() const;
+
+    // HID Device Manager access
+    bs::HIDDeviceManager& getHIDDeviceManager() { return hidDeviceManager; }
+
+    // Listener callback from HIDDeviceManager
+    void touchDetected(const bs::TouchData& touchData) override;
+
 private:
+    //==============================================================================
+    bs::HIDDeviceManager hidDeviceManager;
+
+    // Touch state for audio processing
+    bool previousTouchState = false;
+
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioPluginAudioProcessor)
 };
