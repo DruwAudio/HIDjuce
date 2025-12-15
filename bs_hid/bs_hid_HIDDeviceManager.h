@@ -72,6 +72,9 @@ public:
     /** Diagnostics: Get the most recent touch data */
     TouchData getLatestTouchData() const;
 
+    /** Get all current active touches */
+    std::vector<TouchData> getAllTouches() const;
+
     /** Diagnostics: Get HID report statistics */
     struct ReportStats
     {
@@ -106,10 +109,14 @@ private:
     juce::ListenerList<Listener> listeners;
 
     // Touch state (using atomic for thread-safe communication)
-    std::atomic<uint64_t> packedTouchState{0};  // Packed: x(16) + y(16) + active(1) + timestamp(31)
+    std::atomic<uint64_t> packedTouchState{0};  // Packed: x(16) + y(16) + active(1) + contactId(8) + timestamp(23)
+
+    // Multi-touch state (protected by mutex)
+    mutable juce::CriticalSection touchArrayLock;
+    std::vector<TouchData> currentTouches;
 
     // Configuration
-    int maxTouchPoints = 2;
+    int maxTouchPoints = 10;
 
     // Diagnostic timing
     juce::int64 lastReportTimeTicks = 0;

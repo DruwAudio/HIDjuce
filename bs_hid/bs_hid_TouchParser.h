@@ -21,9 +21,13 @@ public:
     /** Parse ELO Touch (Atmel maXTouch) data */
     static TouchData parseELOTouch(const unsigned char* data, int length, unsigned char reportId);
 
-    /** Parse standard HID multi-touch digitizer data */
+    /** Parse standard HID multi-touch digitizer data (returns first touch only) */
     static TouchData parseStandardTouch(const unsigned char* data, int length,
                                        unsigned char reportId, int maxTouchPoints);
+
+    /** Parse all touches from standard HID multi-touch digitizer data */
+    static std::vector<TouchData> parseStandardTouchMulti(const unsigned char* data, int length,
+                                                          unsigned char reportId, int maxTouchPoints);
 
     /** Validate coordinate ranges */
     static bool isValidCoordinate(uint16_t x, uint16_t y);

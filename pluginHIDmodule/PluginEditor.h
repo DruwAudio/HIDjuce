@@ -30,43 +30,74 @@ public:
         g.setColour(juce::Colours::white);
         g.drawText(isConnected ? "Connected" : "Disconnected", 30, 10, 150, 15, juce::Justification::left);
 
-        // Get current touch data
-        auto touch = processor.getHIDDeviceManager().getLatestTouchData();
+        // Get all current touches
+        auto allTouches = processor.getHIDDeviceManager().getAllTouches();
 
-        // Debug: Always show raw touch data
+        // Debug: Show touch count
         g.setColour(juce::Colours::yellow);
-        g.drawText(juce::String::formatted("Raw: x=%d, y=%d, active=%s, valid=%s",
-                                          touch.x, touch.y,
-                                          touch.isActive ? "true" : "false",
-                                          touch.isValid() ? "true" : "false"),
-                  10, 35, 400, 20, juce::Justification::left);
+        g.drawText(juce::String::formatted("Active Touches: %d", (int)allTouches.size()),
+                  10, 35, 200, 20, juce::Justification::left);
 
-        // Draw touch visualization even if not "valid" - just to see something
-        if (touch.isActive)
+        // Draw all touch points
+        if (!allTouches.empty())
         {
-            // Scale touch coordinates to component bounds
-            // Assuming touch coordinates are 0-32767 range (typical for HID digitizers)
-            float normalizedX = touch.x / 32767.0f;
-            float normalizedY = touch.y / 32767.0f;
+            // Define colors for different touch IDs
+            juce::Colour touchColors[] = {
+                juce::Colours::cyan,
+                juce::Colours::magenta,
+                juce::Colours::yellow,
+                juce::Colours::lime,
+                juce::Colours::orange,
+                juce::Colours::pink,
+                juce::Colours::lightblue,
+                juce::Colours::lightgreen,
+                juce::Colours::violet,
+                juce::Colours::gold
+            };
 
-            float screenX = normalizedX * getWidth();
-            float screenY = normalizedY * getHeight();
+            int yOffset = 60;
+            for (const auto& touch : allTouches)
+            {
+                // Scale touch coordinates to component bounds
+                // Assuming touch coordinates are 0-32767 range (typical for HID digitizers)
+                float normalizedX = touch.x / 32767.0f;
+                float normalizedY = touch.y / 32767.0f;
 
-            // Draw touch point as a circle
-            g.setColour(touch.isValid() ? juce::Colours::cyan : juce::Colours::orange);
-            float radius = 20.0f;
-            g.fillEllipse(screenX - radius, screenY - radius, radius * 2, radius * 2);
+                float screenX = normalizedX * getWidth();
+                float screenY = normalizedY * getHeight();
 
-            // Draw crosshair
-            g.setColour(juce::Colours::white);
-            g.drawLine(screenX - 30, screenY, screenX + 30, screenY, 2.0f);
-            g.drawLine(screenX, screenY - 30, screenX, screenY + 30, 2.0f);
+                // Select color based on contact ID
+                juce::Colour touchColor = touchColors[touch.contactId % 10];
 
-            // Draw coordinates text
-            g.setColour(juce::Colours::lightgreen);
-            g.drawText(juce::String::formatted("Touch: (%d, %d) -> Screen: (%.1f, %.1f)",
-                                              touch.x, touch.y, screenX, screenY),
-                      10, 60, 500, 20, juce::Justification::left);
+                // Draw touch point as a circle
+                g.setColour(touchColor.withAlpha(0.8f));
+                float radius = 25.0f;
+                g.fillEllipse(screenX - radius, screenY - radius, radius * 2, radius * 2);
+
+                // Draw border
+                g.setColour(touchColor);
+                g.drawEllipse(screenX - radius, screenY - radius, radius * 2, radius * 2, 3.0f);
+
+                // Draw crosshair
+                g.setColour(juce::Colours::white);
+                g.drawLine(screenX - 30, screenY, screenX + 30, screenY, 2.0f);
+                g.drawLine(screenX, screenY - 30, screenX, screenY + 30, 2.0f);
+
+                // Draw contact ID on the circle
+                g.setColour(juce::Colours::black);
+                g.setFont(juce::Font(20.0f, juce::Font::bold));
+                g.drawText(juce::String(touch.contactId),
+                          screenX - 15, screenY - 15, 30, 30,
+                          juce::Justification::centred);
+
+                // Draw coordinates text
+                g.setColour(touchColor);
+                g.setFont(12.0f);
+                g.drawText(juce::String::formatted("ID %d: (%d, %d) -> (%.0f, %.0f)",
+                                                  touch.contactId, touch.x, touch.y, screenX, screenY),
+                          10, yOffset, 600, 18, juce::Justification::left);
+                yOffset += 18;
+            }
         }
         else
         {

@@ -262,7 +262,7 @@ void AudioPluginAudioProcessor::touchDetected(const bs::TouchData& touchData)
 {
     // This callback is called from the HID polling thread
     // You can log, update UI, or trigger other events here
-    DBG("Touch detected: x=" << touchData.x << " y=" << touchData.y << " active=" << (touchData.isActive ? "true" : "false"));
+    //DBG("Touch detected: x=" << touchData.x << " y=" << touchData.y << " active=" << (touchData.isActive ? "true" : "false"));
 }
 
 //==============================================================================

@@ -125,9 +125,16 @@ TouchData HIDDeviceManager::getLatestTouchData() const
     data.x = (uint16_t)(packed & 0xFFFF);
     data.y = (uint16_t)((packed >> 16) & 0xFFFF);
     data.isActive = (packed & (1ULL << 32)) != 0;
-    data.timestamp = (int64)((packed >> 33) & 0x7FFFFFFF);
+    data.contactId = (uint8_t)((packed >> 33) & 0xFF);
+    data.timestamp = (juce::int64)((packed >> 41) & 0x7FFFFF);
 
     return data;
+}
+
+std::vector<TouchData> HIDDeviceManager::getAllTouches() const
+{
+    juce::ScopedLock lock(touchArrayLock);
+    return currentTouches;
 }
 
 HIDDeviceManager::ReportStats HIDDeviceManager::getReportStats() const
@@ -188,19 +195,29 @@ void HIDDeviceManager::parseInputReport(unsigned char* data, int length)
 
     // Parse based on device type
     TouchData newTouch;
+    std::vector<TouchData> allTouches;
 
     // ELO Touch (Atmel maXTouch)
     if (connectedDeviceInfo.vendorId == 0x03EB && connectedDeviceInfo.productId == 0x8A6E)
     {
         newTouch = TouchParser::parseELOTouch(data, length, reportId);
+        if (newTouch.isActive)
+            allTouches.push_back(newTouch);
     }
     // Standard HID multi-touch digitizer
     else if (connectedDeviceInfo.vendorId == 0x2575 && connectedDeviceInfo.productId == 0x7317 && reportId == 1)
     {
         newTouch = TouchParser::parseStandardTouch(data, length, reportId, maxTouchPoints);
+        allTouches = TouchParser::parseStandardTouchMulti(data, length, reportId, maxTouchPoints);
     }
 
-    // Update touch state
+    // Update multi-touch state
+    {
+        juce::ScopedLock lock(touchArrayLock);
+        currentTouches = allTouches;
+    }
+
+    // Update single touch state (for backward compatibility)
     updateTouchState(newTouch);
 
     // Measure HID report timing ONLY for active touch reports
@@ -245,10 +262,12 @@ void HIDDeviceManager::parseInputReport(unsigned char* data, int length)
 void HIDDeviceManager::updateTouchState(const TouchData& newTouch)
 {
     // Pack touch data into single atomic 64-bit value
+    // Layout: x(16) + y(16) + active(1) + contactId(8) + timestamp(23)
     uint64_t packed = ((uint64_t)newTouch.x) |
                       (((uint64_t)newTouch.y) << 16) |
                       (newTouch.isActive ? (1ULL << 32) : 0) |
-                      (((uint64_t)(newTouch.timestamp & 0x7FFFFFFF)) << 33);
+                      (((uint64_t)newTouch.contactId) << 33) |
+                      (((uint64_t)(newTouch.timestamp & 0x7FFFFF)) << 41);
 
     packedTouchState.store(packed, std::memory_order_release);
 }
