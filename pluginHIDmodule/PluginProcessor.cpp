@@ -14,6 +14,53 @@ AudioPluginAudioProcessor::AudioPluginAudioProcessor()
 {
     // Register as listener for touch events
     hidDeviceManager.addListener(this);
+
+    // Auto-connect to a touch device
+    auto devices = hidDeviceManager.getAvailableDevices();
+
+    DBG("Found " << devices.size() << " HID devices:");
+    for (const auto& device : devices)
+    {
+        DBG("  - VID:0x" << juce::String::toHexString((int)device.vendorId)
+            << " PID:0x" << juce::String::toHexString((int)device.productId)
+            << " : " << device.manufacturer << " - " << device.product);
+    }
+
+    // Look for known touch devices (ELO or the standard one)
+    bs::HIDDeviceInfo* touchDevice = nullptr;
+    for (auto& device : devices)
+    {
+        // ELO Touch (Atmel maXTouch)
+        if (device.vendorId == 0x03EB && device.productId == 0x8A6E)
+        {
+            touchDevice = &device;
+            DBG("Found ELO Touch device!");
+            break;
+        }
+        // Standard touch digitizer
+        else if (device.vendorId == 0x2575 && device.productId == 0x7317)
+        {
+            touchDevice = &device;
+            DBG("Found standard touch digitizer!");
+            break;
+        }
+    }
+
+    if (touchDevice != nullptr)
+    {
+        if (hidDeviceManager.connectToDevice(*touchDevice))
+        {
+            DBG("Successfully connected to: " << touchDevice->manufacturer << " - " << touchDevice->product);
+        }
+        else
+        {
+            DBG("Failed to connect to touch device");
+        }
+    }
+    else
+    {
+        DBG("No known touch device found. Please check vendor/product IDs.");
+    }
 }
 
 AudioPluginAudioProcessor::~AudioPluginAudioProcessor()
