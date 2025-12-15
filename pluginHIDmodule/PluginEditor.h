@@ -33,10 +33,11 @@ public:
         // Get all current touches
         auto allTouches = processor.getHIDDeviceManager().getAllTouches();
 
-        // Debug: Show touch count
+        // Debug: Show touch count and coordinate info
         g.setColour(juce::Colours::yellow);
-        g.drawText(juce::String::formatted("Active Touches: %d", (int)allTouches.size()),
-                  10, 35, 200, 20, juce::Justification::left);
+        g.drawText(juce::String::formatted("Active Touches: %d | Window: %dx%d",
+                                          (int)allTouches.size(), getWidth(), getHeight()),
+                  10, 35, 400, 20, juce::Justification::left);
 
         // Draw all touch points
         if (!allTouches.empty())
@@ -56,12 +57,36 @@ public:
             };
 
             int yOffset = 60;
+
+            // Track actual coordinate ranges
             for (const auto& touch : allTouches)
             {
-                // Scale touch coordinates to component bounds
-                // Assuming touch coordinates are 0-32767 range (typical for HID digitizers)
-                float normalizedX = touch.x / 32767.0f;
-                float normalizedY = touch.y / 32767.0f;
+                if (touch.x < minX) minX = touch.x;
+                if (touch.x > maxX) maxX = touch.x;
+                if (touch.y < minY) minY = touch.y;
+                if (touch.y > maxY) maxY = touch.y;
+            }
+
+            // Display actual coordinate ranges observed
+            g.setColour(juce::Colours::orange);
+            g.drawText(juce::String::formatted("Touch Range: X[%d-%d] Y[%d-%d]",
+                                              minX, maxX, minY, maxY),
+                      10, 55, 400, 20, juce::Justification::left);
+            yOffset = 80;
+
+            // Use actual observed touchscreen coordinate ranges
+            const float touchMinX = 101.0f;
+            const float touchMaxX = 29947.0f;
+            const float touchMinY = 133.0f;
+            const float touchMaxY = 29986.0f;
+            const float touchRangeX = touchMaxX - touchMinX;
+            const float touchRangeY = touchMaxY - touchMinY;
+
+            for (const auto& touch : allTouches)
+            {
+                // Scale touch coordinates to component bounds using actual ranges
+                float normalizedX = (touch.x - touchMinX) / touchRangeX;
+                float normalizedY = (touch.y - touchMinY) / touchRangeY;
 
                 float screenX = normalizedX * getWidth();
                 float screenY = normalizedY * getHeight();
@@ -115,10 +140,15 @@ public:
 
 private:
     AudioPluginAudioProcessor& processor;
+
+    // Track actual coordinate ranges for calibration
+    uint16_t minX = 65535, maxX = 0;
+    uint16_t minY = 65535, maxY = 0;
 };
 
 //==============================================================================
-class AudioPluginAudioProcessorEditor final : public juce::AudioProcessorEditor
+class AudioPluginAudioProcessorEditor final : public juce::AudioProcessorEditor,
+                                               public juce::KeyListener
 {
 public:
     explicit AudioPluginAudioProcessorEditor (AudioPluginAudioProcessor&);
@@ -128,6 +158,12 @@ public:
     void paint (juce::Graphics&) override;
     void resized() override;
 
+    // KeyListener to handle Escape key to exit fullscreen
+    bool keyPressed(const juce::KeyPress& key, juce::Component* originatingComponent) override;
+
+    // Toggle fullscreen mode
+    void toggleFullscreen();
+
 private:
     // This reference is provided as a quick way for your editor to
     // access the processor object that created it.
@@ -135,6 +171,9 @@ private:
 
     // Touch visualizer component
     TouchVisualizerComponent touchVisualizer;
+
+    // Fullscreen state
+    bool isFullscreen = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioPluginAudioProcessorEditor)
 };
