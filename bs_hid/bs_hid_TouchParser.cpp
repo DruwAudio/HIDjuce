@@ -65,11 +65,8 @@ TouchData TouchParser::parseStandardTouch(const unsigned char* data, int length,
         // Y coordinate (2 bytes, little endian)
         uint16_t y = data[offset + 3] | (data[offset + 4] << 8);
 
-        // Validate coordinates
-        if (isValidCoordinate(x, y))
-        {
-            return TouchData(x, y, true, contactId, juce::Time::currentTimeMillis());
-        }
+        return TouchData(x, y, true, contactId, juce::Time::currentTimeMillis());
+
     }
 
     // No active touches found
@@ -114,16 +111,9 @@ std::vector<TouchData> TouchParser::parseStandardTouchMulti(const unsigned char*
         // Y coordinate (2 bytes, little endian)
         uint16_t y = data[offset + 3] | (data[offset + 4] << 8);
 
-        // Add touch if coordinates are valid
-        if (isValidCoordinate(x, y))
-        {
-            printf("  Found valid touch %d: ID=%d, x=%d, y=%d\n", i, contactId, x, y);
-            touches.push_back(TouchData(x, y, true, contactId, timestamp));
-        }
-        else if (tipSwitch)
-        {
-            printf("  Touch %d has tipSwitch but invalid coords: x=%d, y=%d\n", i, x, y);
-        }
+        // Add touch
+        printf("  Found valid touch %d: ID=%d, x=%d, y=%d\n", i, contactId, x, y);
+        touches.push_back(TouchData(x, y, true, contactId, timestamp));
     }
 
     printf("  Total touches collected: %d\n", (int)touches.size());

@@ -28,8 +28,8 @@ struct TouchData
 
     bool isValid() const
     {
-        static constexpr uint16_t minValidCoord = 100;
-        static constexpr uint16_t maxValidCoord = 30000;
+        static constexpr uint16_t minValidCoord = 0;
+        static constexpr uint16_t maxValidCoord = 300000;
         return x >= minValidCoord && x <= maxValidCoord &&
                y >= minValidCoord && y <= maxValidCoord;
     }

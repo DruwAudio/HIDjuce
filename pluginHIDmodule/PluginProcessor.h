@@ -55,12 +55,16 @@ public:
     // HID Device Manager access
     bs::HIDDeviceManager& getHIDDeviceManager() { return hidDeviceManager; }
 
+    // Touch Calibration Manager access
+    bs::TouchCalibrationManager& getCalibrationManager() { return calibrationManager; }
+
     // Listener callback from HIDDeviceManager
     void touchDetected(const bs::TouchData& touchData) override;
 
 private:
     //==============================================================================
     bs::HIDDeviceManager hidDeviceManager;
+    bs::TouchCalibrationManager calibrationManager;
 
     // Touch state for audio processing
     bool previousTouchState = false;

@@ -31,3 +31,4 @@ namespace bs
 #include "bs_hid_TouchData.h"
 #include "bs_hid_HIDDeviceManager.h"
 #include "bs_hid_TouchParser.h"
+#include "bs_hid_TouchCalibrationManager.h"

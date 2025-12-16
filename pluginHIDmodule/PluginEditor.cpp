@@ -24,7 +24,7 @@ AudioPluginAudioProcessorEditor::~AudioPluginAudioProcessorEditor()
     removeKeyListener(this);
 
     // Exit fullscreen if active
-    if (isFullscreen)
+    if (isFullscreenFlag)
     {
         juce::Desktop::getInstance().setKioskModeComponent(nullptr);
     }
@@ -53,9 +53,15 @@ bool AudioPluginAudioProcessorEditor::keyPressed(const juce::KeyPress& key, juce
         return true;
     }
     // Press Escape to exit fullscreen (if currently in fullscreen)
-    else if (key == juce::KeyPress::escapeKey && isFullscreen)
+    else if (key == juce::KeyPress::escapeKey && isFullscreenFlag)
     {
         toggleFullscreen();
+        return true;
+    }
+    // Press 'C' to enter calibration mode
+    else if (key == juce::KeyPress('c', juce::ModifierKeys::noModifiers, 0))
+    {
+        touchVisualizer.startCalibration();
         return true;
     }
 
@@ -64,17 +70,17 @@ bool AudioPluginAudioProcessorEditor::keyPressed(const juce::KeyPress& key, juce
 
 void AudioPluginAudioProcessorEditor::toggleFullscreen()
 {
-    if (isFullscreen)
+    if (isFullscreenFlag)
     {
         // Exit fullscreen/kiosk mode
         juce::Desktop::getInstance().setKioskModeComponent(nullptr);
-        isFullscreen = false;
+        isFullscreenFlag = false;
     }
     else
     {
         // Enter fullscreen/kiosk mode
         // This will make the window cover the entire screen and capture all input
-        juce::Desktop::getInstance().setKioskModeComponent(getTopLevelComponent(), false);
-        isFullscreen = true;
+        juce::Desktop::getInstance().setKioskModeComponent(getTopLevelComponent(), true);
+        isFullscreenFlag = true;
     }
 }

@@ -15,6 +15,10 @@ AudioPluginAudioProcessor::AudioPluginAudioProcessor()
     // Register as listener for touch events
     hidDeviceManager.addListener(this);
 
+    // Load touch calibration
+    bool calibLoaded = calibrationManager.loadFromFile();
+    DBG("Touch calibration: " << (calibLoaded ? "Loaded from file" : "Using defaults"));
+
     // Auto-connect to a touch device
     auto devices = hidDeviceManager.getAvailableDevices();
 

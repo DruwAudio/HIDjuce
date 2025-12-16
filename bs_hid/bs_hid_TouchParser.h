@@ -33,8 +33,8 @@ public:
     static bool isValidCoordinate(uint16_t x, uint16_t y);
 
 private:
-    static constexpr uint16_t minValidCoord = 100;
-    static constexpr uint16_t maxValidCoord = 30000;
+    static constexpr uint16_t minValidCoord = 0;
+    static constexpr uint16_t maxValidCoord = 60000;
 
     TouchParser() = delete;  // Static class only
 };
