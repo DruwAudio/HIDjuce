@@ -39,7 +39,7 @@ TouchData TouchParser::parseStandardTouch(const unsigned char* data, int length,
 
     // Extract contact count (last byte before scan time)
     unsigned char contactCount = data[length - 1];
-    printf("Contact Count: %d\n", contactCount);
+//    printf("Contact Count: %d\n", contactCount);
 
 
     // Parse each touch point (limited by maxTouchPoints for better latency)
@@ -85,8 +85,7 @@ std::vector<TouchData> TouchParser::parseStandardTouchMulti(const unsigned char*
 
     // Extract contact count for debugging
     unsigned char contactCount = data[length - 1];
-    printf("parseStandardTouchMulti - Contact Count: %d, length: %d, maxTouchPoints: %d\n",
-           contactCount, length, maxTouchPoints);
+//    printf("parseStandardTouchMulti - Contact Count: %d, length: %d, maxTouchPoints: %d\n", contactCount, length, maxTouchPoints);
 
     // Parse each touch point (limited by maxTouchPoints for better latency)
     for (int i = 0; i < maxTouchPoints && (1 + i * 5 + 4) < length - 1; ++i)
@@ -112,11 +111,11 @@ std::vector<TouchData> TouchParser::parseStandardTouchMulti(const unsigned char*
         uint16_t y = data[offset + 3] | (data[offset + 4] << 8);
 
         // Add touch
-        printf("  Found valid touch %d: ID=%d, x=%d, y=%d\n", i, contactId, x, y);
+//        printf("  Found valid touch %d: ID=%d, x=%d, y=%d\n", i, contactId, x, y);
         touches.push_back(TouchData(x, y, true, contactId, timestamp));
     }
 
-    printf("  Total touches collected: %d\n", (int)touches.size());
+//    printf("  Total touches collected: %d\n", (int)touches.size());
     return touches;
 }
 
