@@ -8,7 +8,7 @@
 
 #include "bs_hid.h"
 
-namespace bs
+namespace bs_hid
 {
 
 TouchCalibrationManager::TouchCalibrationManager()
@@ -218,4 +218,4 @@ juce::Point<float> TouchCalibrationManager::convertTouchToNormalized(const Touch
 }
 
 
-} // namespace bs
+} // namespace bs_hid

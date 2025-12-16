@@ -12,7 +12,7 @@
     #include "bs_hid.h"
 #endif
 
-namespace bs
+namespace bs_hid
 {
 
 TouchData TouchParser::parseELOTouch(const unsigned char* data, int length, unsigned char reportId)
@@ -125,4 +125,4 @@ bool TouchParser::isValidCoordinate(uint16_t x, uint16_t y)
            y >= minValidCoord && y <= maxValidCoord;
 }
 
-} // namespace bs
+} // namespace bs_hid

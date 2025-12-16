@@ -8,7 +8,7 @@
 
 #pragma once
 
-namespace bs
+namespace bs_hid
 {
 
 /**
@@ -157,4 +157,4 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(HIDDeviceManager)
 };
 
-} // namespace bs
+} // namespace bs_hid

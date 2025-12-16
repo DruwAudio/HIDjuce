@@ -8,7 +8,7 @@
 
 #pragma once
 
-namespace bs
+namespace bs_hid
 {
 
 /** Structure to hold touch state data */
@@ -35,4 +35,4 @@ struct TouchData
     }
 };
 
-} // namespace bs
+} // namespace bs_hid

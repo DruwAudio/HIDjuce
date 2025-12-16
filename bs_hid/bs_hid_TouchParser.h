@@ -8,7 +8,7 @@
 
 #pragma once
 
-namespace bs
+namespace bs_hid
 {
 
 /**
@@ -39,4 +39,4 @@ private:
     TouchParser() = delete;  // Static class only
 };
 
-} // namespace bs
+} // namespace bs_hid

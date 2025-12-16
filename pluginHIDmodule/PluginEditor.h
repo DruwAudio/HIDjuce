@@ -29,7 +29,7 @@ private:
     AudioPluginAudioProcessor& processorRef;
 
     // Touch visualizer component
-    bs::TouchVisualizerComponent touchVisualizer;
+    bs_hid::TouchVisualizerComponent touchVisualizer;
 
     // Fullscreen state
     bool isFullscreenFlag = false;

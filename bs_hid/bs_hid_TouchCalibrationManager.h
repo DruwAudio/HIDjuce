@@ -9,7 +9,7 @@
 
 #pragma once
 
-namespace bs
+namespace bs_hid
 {
 
 /** Manages touch screen calibration data with persistent XML storage */
@@ -66,4 +66,4 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(TouchCalibrationManager)
 };
 
-} // namespace bs
+} // namespace bs_hid

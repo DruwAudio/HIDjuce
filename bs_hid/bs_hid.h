@@ -23,7 +23,7 @@
 // Include hidapi header
 #include "../hidapi/hidapi/hidapi.h"
 
-namespace bs
+namespace bs_hid
 {
     using namespace juce;
 }

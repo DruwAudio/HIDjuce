@@ -12,7 +12,7 @@
     #include "bs_hid.h"
 #endif
 
-namespace bs
+namespace bs_hid
 {
 
 //==============================================================================
@@ -339,4 +339,4 @@ void HIDDeviceManager::attemptAutoReconnect()
     }
 }
 
-} // namespace bs
+} // namespace bs_hid

@@ -200,12 +200,12 @@ void AudioPluginAudioProcessor::setStateInformation (const void* data, int sizeI
 //==============================================================================
 // HID Device Management
 
-std::vector<bs::HIDDeviceInfo> AudioPluginAudioProcessor::getAvailableHIDDevices()
+std::vector<bs_hid::HIDDeviceInfo> AudioPluginAudioProcessor::getAvailableHIDDevices()
 {
     return hidDeviceManager.getAvailableDevices();
 }
 
-void AudioPluginAudioProcessor::connectToDevice(const bs::HIDDeviceInfo& device)
+void AudioPluginAudioProcessor::connectToDevice(const bs_hid::HIDDeviceInfo& device)
 {
     hidDeviceManager.connectToDevice(device);
 }
@@ -220,12 +220,12 @@ bool AudioPluginAudioProcessor::isDeviceConnected() const
     return hidDeviceManager.isDeviceConnected();
 }
 
-const bs::HIDDeviceInfo& AudioPluginAudioProcessor::getConnectedDeviceInfo() const
+const bs_hid::HIDDeviceInfo& AudioPluginAudioProcessor::getConnectedDeviceInfo() const
 {
     return hidDeviceManager.getConnectedDeviceInfo();
 }
 
-void AudioPluginAudioProcessor::touchDetected(const bs::TouchData& touchData)
+void AudioPluginAudioProcessor::touchDetected(const bs_hid::TouchData& touchData)
 {
     // This callback is called from the HID polling thread
     // You can log, update UI, or trigger other events here
@@ -250,7 +250,7 @@ void AudioPluginAudioProcessor::attemptTouchDeviceConnection()
     }
 
     // Look for known touch devices (ELO or the standard one)
-    bs::HIDDeviceInfo* touchDevice = nullptr;
+    bs_hid::HIDDeviceInfo* touchDevice = nullptr;
     for (auto& device : devices)
     {
         // ELO Touch (Atmel maXTouch)

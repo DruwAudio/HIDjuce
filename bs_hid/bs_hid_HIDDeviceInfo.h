@@ -8,7 +8,7 @@
 
 #pragma once
 
-namespace bs
+namespace bs_hid
 {
 
 /** Structure to hold information about a HID device */
@@ -30,4 +30,4 @@ struct HIDDeviceInfo
     {}
 };
 
-} // namespace bs
+} // namespace bs_hid

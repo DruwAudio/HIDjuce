@@ -5,7 +5,7 @@
 
 //==============================================================================
 class AudioPluginAudioProcessor final : public juce::AudioProcessor,
-                                       public bs::HIDDeviceManager::Listener
+                                       public bs_hid::HIDDeviceManager::Listener
 {
 public:
     //==============================================================================
@@ -46,28 +46,28 @@ public:
 
     //==============================================================================
     // HID Device Management
-    std::vector<bs::HIDDeviceInfo> getAvailableHIDDevices();
-    void connectToDevice(const bs::HIDDeviceInfo& device);
+    std::vector<bs_hid::HIDDeviceInfo> getAvailableHIDDevices();
+    void connectToDevice(const bs_hid::HIDDeviceInfo& device);
     void disconnectFromDevice();
     bool isDeviceConnected() const;
-    const bs::HIDDeviceInfo& getConnectedDeviceInfo() const;
+    const bs_hid::HIDDeviceInfo& getConnectedDeviceInfo() const;
 
     // HID Device Manager access
-    bs::HIDDeviceManager& getHIDDeviceManager() { return hidDeviceManager; }
+    bs_hid::HIDDeviceManager& getHIDDeviceManager() { return hidDeviceManager; }
 
     // Touch Calibration Manager access
-    bs::TouchCalibrationManager& getCalibrationManager() { return calibrationManager; }
+    bs_hid::TouchCalibrationManager& getCalibrationManager() { return calibrationManager; }
 
     // Listener callback from HIDDeviceManager
-    void touchDetected(const bs::TouchData& touchData) override;
+    void touchDetected(const bs_hid::TouchData& touchData) override;
 
 private:
     // Attempt to connect to known touch devices
     void attemptTouchDeviceConnection();
 
     //==============================================================================
-    bs::HIDDeviceManager hidDeviceManager;
-    bs::TouchCalibrationManager calibrationManager;
+    bs_hid::HIDDeviceManager hidDeviceManager;
+    bs_hid::TouchCalibrationManager calibrationManager;
 
     // Touch state for audio processing
     bool previousTouchState = false;

@@ -11,7 +11,7 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
-namespace bs
+namespace bs_hid
 {
 
 /** Component that visualizes touch events and handles calibration */
@@ -342,4 +342,4 @@ private:
     float crosshairPulsePhase = 0.0f;
 };
 
-} // namespace bs
+} // namespace bs_hid

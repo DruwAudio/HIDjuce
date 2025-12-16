@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(perl -i -pe:*)",
+      "Bash(for:*)",
+      "Bash(do sed -i '' 's/namespace bs$/namespace bs_hid/g' \"$f\")",
+      "Bash(done)",
+      "Bash(do sed -i '' 's/namespace bs/namespace bs_hid/g' \"$f\")"
+    ]
+  }
+}
