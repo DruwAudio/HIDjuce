@@ -3,7 +3,7 @@
 
 //==============================================================================
 AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor (AudioPluginAudioProcessor& p)
-    : AudioProcessorEditor (&p), processorRef (p), touchVisualizer(p)
+    : AudioProcessorEditor (&p), processorRef (p), touchVisualizer(p.getHIDDeviceManager(), p.getCalibrationManager())
 {
     // Add and make the touch visualizer visible
     addAndMakeVisible(touchVisualizer);

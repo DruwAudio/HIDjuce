@@ -7,8 +7,6 @@
 */
 
 #include "bs_hid.h"
-#include "bs_hid_TouchCalibrationManager.h"
-
 
 namespace bs
 {
