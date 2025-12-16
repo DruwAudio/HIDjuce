@@ -7,6 +7,8 @@
 */
 
 #include "bs_hid.h"
+#include "bs_hid_TouchCalibrationManager.h"
+
 
 namespace bs
 {
@@ -200,5 +202,22 @@ void TouchCalibrationManager::resetToDefaults()
     currentBounds.maxY = 29986.0f;
     currentBounds.isCalibrated = false;
 }
+
+juce::Point<float> TouchCalibrationManager::convertTouchToNormalized(const TouchData &touch) const
+{
+    juce::ScopedLock sl(lock);
+
+    if (currentBounds.isCalibrated)
+    {
+        return juce::Point<float>((touch.x - currentBounds.minX) / (currentBounds.maxX - currentBounds.minX),
+                                  (touch.y - currentBounds.minY) / (currentBounds.maxY - currentBounds.minY));
+    }
+    else
+    {
+        jassert(false);
+        return juce::Point<float>(touch.x / 32768.0f, touch.y / 32768.0f);
+    }
+}
+
 
 } // namespace bs

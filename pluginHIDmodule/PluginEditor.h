@@ -89,23 +89,12 @@ public:
                       10, 55, 400, 20, juce::Justification::left);
             yOffset = 80;
 
-            // Use calibration bounds
-            auto bounds = processor.getCalibrationManager().getBounds();
-            const float touchMinX = bounds.minX;
-            const float touchMaxX = bounds.maxX;
-            const float touchMinY = bounds.minY;
-            const float touchMaxY = bounds.maxY;
-            const float touchRangeX = touchMaxX - touchMinX;
-            const float touchRangeY = touchMaxY - touchMinY;
-
             for (const auto& touch : allTouches)
             {
-                // Scale touch coordinates to component bounds using actual ranges
-                float normalizedX = (touch.x - touchMinX) / touchRangeX;
-                float normalizedY = (touch.y - touchMinY) / touchRangeY;
+                juce::Point<float> normaizedTouch = processor.getCalibrationManager().convertTouchToNormalized(touch);
 
-                float screenX = normalizedX * getWidth();
-                float screenY = normalizedY * getHeight();
+                float screenX = normaizedTouch.x * static_cast<float>(getWidth());
+                float screenY = normaizedTouch.y * static_cast<float>(getHeight());
 
                 // Select color based on contact ID
                 juce::Colour touchColor = touchColors[touch.contactId % 10];

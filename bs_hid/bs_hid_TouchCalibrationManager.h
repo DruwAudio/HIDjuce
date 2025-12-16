@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <juce_graphics/juce_graphics.h>
+
 namespace bs
 {
 
@@ -47,6 +49,8 @@ public:
 
     /** Get the calibration file path for diagnostics */
     juce::File getCalibrationFile() const;
+
+    juce::Point<float> convertTouchToNormalized(const TouchData& touch) const;
 
 private:
     /** Get configuration directory, creating it if needed */
