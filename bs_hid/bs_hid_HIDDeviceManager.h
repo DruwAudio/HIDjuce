@@ -19,8 +19,10 @@ namespace bs
     - Connecting/disconnecting from devices
     - Running a high-priority polling thread
     - Parsing HID reports and generating touch callbacks
+    - Automatic reconnection on device disconnect
 */
-class HIDDeviceManager : public juce::Thread
+class HIDDeviceManager : public juce::Thread,
+                         public juce::Timer
 {
 public:
     //==============================================================================
@@ -69,6 +71,20 @@ public:
     int getMaxTouchPoints() const { return maxTouchPoints; }
 
     //==============================================================================
+    /** Enable automatic reconnection for specific device VID/PID pairs
+        @param vendorProductPairs Vector of {vendorId, productId} pairs to auto-reconnect
+        @param checkIntervalMs How often to check connection status (default: 2000ms)
+    */
+    void enableAutoReconnect(const std::vector<std::pair<uint16_t, uint16_t>>& vendorProductPairs,
+                            int checkIntervalMs = 2000);
+
+    /** Disable automatic reconnection */
+    void disableAutoReconnect();
+
+    /** Check if auto-reconnect is enabled */
+    bool isAutoReconnectEnabled() const { return autoReconnectEnabled; }
+
+    //==============================================================================
     /** Diagnostics: Get the most recent touch data */
     TouchData getLatestTouchData() const;
 
@@ -90,6 +106,12 @@ private:
     //==============================================================================
     // Thread run method
     void run() override;
+
+    // Timer callback for auto-reconnect
+    void timerCallback() override;
+
+    // Auto-reconnect helper
+    void attemptAutoReconnect();
 
     // HID reading and parsing
     void readHIDEvents();
@@ -117,6 +139,10 @@ private:
 
     // Configuration
     int maxTouchPoints = 10;
+
+    // Auto-reconnect configuration
+    bool autoReconnectEnabled = false;
+    std::vector<std::pair<uint16_t, uint16_t>> autoReconnectDevices; // {vendorId, productId} pairs
 
     // Diagnostic timing
     juce::int64 lastReportTimeTicks = 0;

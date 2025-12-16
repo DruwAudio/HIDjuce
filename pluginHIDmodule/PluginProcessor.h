@@ -62,6 +62,9 @@ public:
     void touchDetected(const bs::TouchData& touchData) override;
 
 private:
+    // Attempt to connect to known touch devices
+    void attemptTouchDeviceConnection();
+
     //==============================================================================
     bs::HIDDeviceManager hidDeviceManager;
     bs::TouchCalibrationManager calibrationManager;

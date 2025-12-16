@@ -277,4 +277,66 @@ void HIDDeviceManager::notifyListeners(const TouchData& touch)
     listeners.call([&](Listener& l) { l.touchDetected(touch); });
 }
 
+//==============================================================================
+// Auto-reconnect functionality
+
+void HIDDeviceManager::enableAutoReconnect(const std::vector<std::pair<uint16_t, uint16_t>>& vendorProductPairs,
+                                          int checkIntervalMs)
+{
+    autoReconnectDevices = vendorProductPairs;
+    autoReconnectEnabled = true;
+    startTimer(checkIntervalMs);
+
+    DBG("Auto-reconnect enabled for " << vendorProductPairs.size() << " device(s), checking every " << checkIntervalMs << "ms");
+}
+
+void HIDDeviceManager::disableAutoReconnect()
+{
+    autoReconnectEnabled = false;
+    stopTimer();
+    DBG("Auto-reconnect disabled");
+}
+
+void HIDDeviceManager::timerCallback()
+{
+    // Check if device is still connected
+    if (!isDeviceConnected() && autoReconnectEnabled)
+    {
+        DBG("Device disconnected, attempting auto-reconnect...");
+        attemptAutoReconnect();
+    }
+}
+
+void HIDDeviceManager::attemptAutoReconnect()
+{
+    if (autoReconnectDevices.empty())
+        return;
+
+    // Get available devices
+    auto devices = getAvailableDevices();
+
+    // Look for any device matching our auto-reconnect list
+    for (const auto& [targetVendorId, targetProductId] : autoReconnectDevices)
+    {
+        for (auto& device : devices)
+        {
+            if (device.vendorId == targetVendorId && device.productId == targetProductId)
+            {
+                DBG("Found auto-reconnect device: VID:0x" << juce::String::toHexString((int)device.vendorId)
+                    << " PID:0x" << juce::String::toHexString((int)device.productId));
+
+                if (connectToDevice(device))
+                {
+                    DBG("Successfully reconnected to: " << device.manufacturer << " - " << device.product);
+                    return;
+                }
+                else
+                {
+                    DBG("Failed to reconnect to device");
+                }
+            }
+        }
+    }
+}
+
 } // namespace bs
